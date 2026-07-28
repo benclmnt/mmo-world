@@ -22,7 +22,7 @@ Create a minimal playable browser-based real-time multiplayer 2D world:
 - Browser clients send movement intentions through WebSockets.
 - Phaser renders the shared procedural tile world.
 - Human players and server-controlled heuristic agents use the same action interface.
-- A 64×64 seeded world contains grass, dirt, water, stone, and trees.
+- A 64×64 seeded world contains grass, water, trees, and rocks.
 - Movement is four-directional, collision-aware, simultaneous, deterministic, and visually interpolated.
 - The initial target supports 20+ bots and a basic load test of 50 synthetic clients.
 
@@ -33,8 +33,8 @@ Create a minimal playable browser-based real-time multiplayer 2D world:
 Implement the simulation before rendering or networking.
 
 - 64×64 grid; seeded procedural terrain.
-- Logical terrain: grass, dirt, water, stone, tree.
-- Walkable: grass, dirt, stone. Blocked: water, tree.
+- Logical terrain: grass, water, tree, rock.
+- Walkable: grass and tree. Blocked: water and rock.
 - Humans and bots as generic entities.
 - `step(actions)` is the only simulation advancement mechanism; no timers inside simulation.
 - Deterministic RNG, spawn selection, collision rules, snapshots, and agent observations.
@@ -136,13 +136,14 @@ export interface Simulation {
 
 ## Terrain generation (proposed)
 
-Use a deterministic, portable noise implementation shared by server/client logic where useful.
+Use a deterministic, portable generation implementation. The first terrain model is deliberately minimal:
 
-1. Broad elevation layer chooses water, dirt, grass, and stone.
-2. Vegetation layer turns suitable grass into clustered trees.
-3. Surface variation adds smaller dirt/stone patches.
-4. Clear approximately 9×9 central spawn area.
-5. Flood-fill from spawn centre; deterministically retry with an attempt index if connected walkable area is insufficient (suggested threshold: 55–65%).
+- `Grass`: walkable open ground.
+- `Tree`: walkable forest terrain; may later transition to grass when harvested and back through regrowth.
+- `Water`: blocked.
+- `Rock`: blocked.
+
+The generator should make coherent land, water, forest, and rocky regions.
 
 The simulation stores only logical tile IDs. Visual variants derive deterministically from seed, coordinates, tile type, and optional neighbours.
 
