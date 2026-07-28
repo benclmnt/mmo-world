@@ -1,0 +1,10 @@
+{
+  "name": "realtime-world",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "test": "bun test",
+    "world:print": "bun run packages/simulation/src/printWorld.ts"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "realtime-world",
+    },
+    "packages/simulation": {
+      "name": "@realtime-world/simulation",
+      "version": "0.0.0",
+    },
+  },
+  "packages": {
+    "@realtime-world/simulation": ["@realtime-world/simulation@workspace:packages/simulation"],
+  }
+}
