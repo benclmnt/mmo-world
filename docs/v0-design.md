@@ -126,8 +126,11 @@ export interface StepInput {
 export interface Simulation {
   readonly tick: number;
   step(input: StepInput): StepResult;
+  /** Adds an entity at an explicitly validated position. */
   addEntity(entity: Entity): void;
-  removeEntity(entityId: EntityId): void;
+  /** Deterministically chooses an unoccupied grass spawn tile. */
+  spawnEntity(entityId: EntityId, options: SpawnOptions): Entity;
+  removeEntity(entityId: EntityId): boolean;
   getEntity(entityId: EntityId): Entity | undefined;
   observeAgent(entityId: EntityId): AgentObservation;
   createSnapshot(): SimulationSnapshot;
@@ -145,7 +148,7 @@ Use a deterministic, portable generation implementation. The first terrain model
 
 The generator produces broad noise-shaped lakes, clustered traversable forests, and rock regions. Some deterministic candidates also receive a variable-width river that runs from a map edge into an interior lake.
 
-There is no forced central clearing. When entity spawning is implemented, it will select unoccupied `Grass` tiles deterministically from the connected playable region.
+There is no forced central clearing. When entity spawning is implemented, it will select unoccupied `Grass` tiles deterministically from the connected playable region. Spawn selection uses a configurable minimum Manhattan (four-direction movement) separation from existing entities. It never silently violates that policy: if no qualifying tile exists, selection fails explicitly.
 
 A generated candidate is accepted only when **all walkable tiles** (`Grass` and `Tree`) form one four-directionally connected region. If a candidate fails, the generator derives a deterministic attempt seed from the public world seed and retries; therefore the same public seed still always produces the same accepted world.
 
