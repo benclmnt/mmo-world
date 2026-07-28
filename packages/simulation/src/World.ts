@@ -8,6 +8,8 @@ export class World {
     readonly width: number,
     readonly height: number,
     tiles?: Uint8Array,
+    /** Zero-based deterministic retry used to produce this playable terrain. */
+    readonly generationAttempt = 0,
   ) {
     if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
       throw new Error("World dimensions must be positive integers");

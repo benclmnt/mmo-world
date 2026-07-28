@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Terrain } from "../src/Terrain";
-import { generateWorld, SPAWN_CLEARING_RADIUS } from "../src/generation/generateWorld";
+import { analyzeWalkableConnectivity } from "../src/generation/connectivity";
+import { generateWorld } from "../src/generation/generateWorld";
 
 describe("world generation", () => {
   test("is deterministic for the same seed", () => {
@@ -17,15 +18,20 @@ describe("world generation", () => {
     expect([...first.tiles]).not.toEqual([...second.tiles]);
   });
 
-  test("clears a grass spawn region in the map centre", () => {
+  test("contains grass tiles that can later be used as spawn candidates", () => {
     const world = generateWorld({ seed: 12345 });
-    const centerX = Math.floor(world.width / 2);
-    const centerY = Math.floor(world.height / 2);
+    const grassTiles = [...world.tiles].filter((tile) => tile === Terrain.Grass);
 
-    for (let y = centerY - SPAWN_CLEARING_RADIUS; y <= centerY + SPAWN_CLEARING_RADIUS; y++) {
-      for (let x = centerX - SPAWN_CLEARING_RADIUS; x <= centerX + SPAWN_CLEARING_RADIUS; x++) {
-        expect(world.get(x, y)).toBe(Terrain.Grass);
-      }
+    expect(grassTiles.length).toBeGreaterThan(0);
+  });
+
+  test("accepts only worlds whose walkable terrain is fully connected", () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      const world = generateWorld({ seed });
+      const connectivity = analyzeWalkableConnectivity(world);
+
+      expect(connectivity.totalWalkable).toBeGreaterThan(0);
+      expect(connectivity.isFullyConnected).toBe(true);
     }
   });
 });

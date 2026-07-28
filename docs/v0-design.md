@@ -45,7 +45,7 @@ Completion checks:
 - Same seed => same terrain.
 - Same seed/entities/actions => same state after every step.
 - Blocked terrain and shared occupancy are impossible.
-- Spawn locations are walkable and reachable from a central cleared region.
+- Spawn locations are selected deterministically from unoccupied grass tiles in a sufficiently connected playable region.
 
 ### M1 — Local Phaser world
 
@@ -143,7 +143,11 @@ Use a deterministic, portable generation implementation. The first terrain model
 - `Water`: blocked.
 - `Rock`: blocked.
 
-The generator should make coherent land, water, forest, and rocky regions.
+The generator produces broad noise-shaped lakes, clustered traversable forests, and rock regions. Some deterministic candidates also receive a variable-width river that runs from a map edge into an interior lake.
+
+There is no forced central clearing. When entity spawning is implemented, it will select unoccupied `Grass` tiles deterministically from the connected playable region.
+
+A generated candidate is accepted only when **all walkable tiles** (`Grass` and `Tree`) form one four-directionally connected region. If a candidate fails, the generator derives a deterministic attempt seed from the public world seed and retries; therefore the same public seed still always produces the same accepted world.
 
 The simulation stores only logical tile IDs. Visual variants derive deterministically from seed, coordinates, tile type, and optional neighbours.
 
