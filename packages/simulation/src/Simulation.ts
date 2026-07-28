@@ -1,16 +1,8 @@
 import type { Entity, EntityId } from "./Entity";
-import { Terrain, isWalkable } from "./Terrain";
-import { RandomSource } from "./random";
+import { isWalkable } from "./Terrain";
+import { SeededRandom } from "./generation/rng";
+import { chooseSpawnPosition, type SpawnOptions } from "./spawn";
 import { World } from "./World";
-
-export type SpawnFallback = "maximize-separation" | "reject";
-
-export interface SpawnOptions {
-  /** Manhattan-tile distance required from every existing entity. */
-  minimumSeparation: number;
-  /** Explicit behavior when no grass tile satisfies the requested spacing. */
-  fallback: SpawnFallback;
-}
 
 /**
  * The deterministic world-state owner. Movement actions will be added next;
@@ -19,10 +11,10 @@ export interface SpawnOptions {
 export class Simulation {
   private readonly entityById = new Map<EntityId, Entity>();
   private readonly occupancy = new Map<number, EntityId>();
-  private readonly rng: RandomSource;
+  private readonly rng: SeededRandom;
 
   constructor(readonly world: World, simulationSeed = world.seed) {
-    this.rng = new RandomSource(simulationSeed);
+    this.rng = new SeededRandom(simulationSeed);
   }
 
   get entityCount(): number {
@@ -45,40 +37,21 @@ export class Simulation {
   }
 
   /**
-   * Selects a random grass tile that respects the requested separation where
-   * possible. Randomness is deterministic for an equal simulation seed and
-   * equal sequence of simulation calls.
+   * Chooses a random eligible grass tile. The shared spawn selector enforces
+   * the explicit minimum-separation policy and returns no position when that
+   * policy cannot be satisfied.
    */
-  spawnEntity(entityId: EntityId, spawnOptions: SpawnOptions): Entity {
+  spawnEntity(entityId: EntityId, options: SpawnOptions): Entity {
     if (this.entityById.has(entityId)) {
       throw new Error(`Entity '${entityId}' already exists`);
     }
 
-    if (!Number.isInteger(spawnOptions.minimumSeparation) || spawnOptions.minimumSeparation < 0) {
-      throw new Error("minimumSeparation must be a non-negative integer");
+    const position = chooseSpawnPosition(this.world, this.entityById, this.rng, options);
+    if (position === undefined) {
+      throw new Error("No eligible grass tile is available for spawning");
     }
 
-    const candidates = this.availableGrassTiles();
-    if (candidates.length === 0) {
-      throw new Error("No unoccupied grass tile is available for spawning");
-    }
-
-    const spacedCandidates = candidates.filter((candidate) =>
-      this.minimumDistanceToEntities(candidate.x, candidate.y) >= spawnOptions.minimumSeparation,
-    );
-
-    let chosen: Position;
-    if (spacedCandidates.length > 0) {
-      chosen = this.rng.pick(spacedCandidates);
-    } else if (spawnOptions.fallback === "maximize-separation") {
-      chosen = this.chooseMostSeparated(candidates);
-    } else {
-      throw new Error(
-        `No grass tile satisfies minimum spawn separation ${spawnOptions.minimumSeparation}`,
-      );
-    }
-
-    const entity = { id: entityId, ...chosen };
+    const entity = { id: entityId, ...position };
     this.addEntity(entity);
     return { ...entity };
   }
@@ -106,48 +79,6 @@ export class Simulation {
     return true;
   }
 
-  private availableGrassTiles(): Position[] {
-    const candidates: Position[] = [];
-    for (let y = 0; y < this.world.height; y++) {
-      for (let x = 0; x < this.world.width; x++) {
-        if (this.world.get(x, y) === Terrain.Grass && !this.isOccupied(x, y)) {
-          candidates.push({ x, y });
-        }
-      }
-    }
-    return candidates;
-  }
-
-  private chooseMostSeparated(candidates: readonly Position[]): Position {
-    let greatestDistance = -1;
-    const best: Position[] = [];
-
-    for (const candidate of candidates) {
-      const distance = this.minimumDistanceToEntities(candidate.x, candidate.y);
-      if (distance > greatestDistance) {
-        greatestDistance = distance;
-        best.length = 0;
-        best.push(candidate);
-      } else if (distance === greatestDistance) {
-        best.push(candidate);
-      }
-    }
-
-    return this.rng.pick(best);
-  }
-
-  private minimumDistanceToEntities(x: number, y: number): number {
-    if (this.entityById.size === 0) {
-      return Number.POSITIVE_INFINITY;
-    }
-
-    let minimum = Number.POSITIVE_INFINITY;
-    for (const entity of this.entityById.values()) {
-      minimum = Math.min(minimum, Math.abs(entity.x - x) + Math.abs(entity.y - y));
-    }
-    return minimum;
-  }
-
   private assertValidEntityPosition(x: number, y: number): void {
     if (!this.world.inBounds(x, y)) {
       throw new Error(`Entity position (${x}, ${y}) is outside the world`);
@@ -163,9 +94,4 @@ export class Simulation {
   private positionKey(x: number, y: number): number {
     return y * this.world.width + x;
   }
-}
-
-interface Position {
-  x: number;
-  y: number;
 }

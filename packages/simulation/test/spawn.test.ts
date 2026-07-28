@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Entity } from "../src/Entity";
+import { Simulation } from "../src/Simulation";
 import { Terrain } from "../src/Terrain";
 import { World } from "../src/World";
 import { SeededRandom } from "../src/generation/rng";
@@ -53,4 +54,14 @@ describe("spawn selection", () => {
 
     expect(spawn).toEqual({ x: 1, y: 0 });
   });
+});
+
+test("simulation removal frees an occupied position", () => {
+  const simulation = new Simulation(new World(1, 3, 3), 2);
+  simulation.addEntity({ id: "human-1", x: 1, y: 1 });
+
+  expect(simulation.isOccupied(1, 1)).toBe(true);
+  expect(simulation.removeEntity("human-1")).toBe(true);
+  expect(simulation.isOccupied(1, 1)).toBe(false);
+  expect(simulation.getEntity("human-1")).toBeUndefined();
 });
