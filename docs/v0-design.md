@@ -36,7 +36,7 @@ Implement the simulation before rendering or networking.
 - Logical terrain: grass, water, tree, rock.
 - Walkable: grass and tree. Blocked: water and rock.
 - Humans and bots as generic entities.
-- `step(actions)` is the only simulation advancement mechanism; no timers inside simulation.
+- `step({ actions })` is the only simulation advancement mechanism; no timers inside simulation.
 - Deterministic RNG, spawn selection, collision rules, snapshots, and agent observations.
 - Terrain and state determinism tests.
 
@@ -126,8 +126,8 @@ export interface StepInput {
 export interface Simulation {
   readonly tick: number;
   step(input: StepInput): StepResult;
-  /** Adds an entity at an explicitly validated position. */
-  addEntity(entity: Entity): void;
+  /** Places an entity at an explicitly validated position. */
+  placeEntity(entity: Entity): void;
   /** Deterministically chooses an unoccupied grass spawn tile. */
   spawnEntity(entityId: EntityId, options: SpawnOptions): Entity;
   removeEntity(entityId: EntityId): boolean;

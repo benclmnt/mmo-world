@@ -58,7 +58,7 @@ describe("spawn selection", () => {
 
 test("simulation removal frees an occupied position", () => {
   const simulation = new Simulation(new World(1, 3, 3), 2);
-  simulation.addEntity({ id: "human-1", x: 1, y: 1 });
+  simulation.placeEntity({ id: "human-1", x: 1, y: 1 });
 
   expect(simulation.isOccupied(1, 1)).toBe(true);
   expect(simulation.removeEntity("human-1")).toBe(true);
