@@ -5,7 +5,7 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 8000,
-    allowedHosts: ["benclmntdevbox0.exe.xyz"],
+    allowedHosts: ["mmo.benclmnt.com", "ben-nmmo.exe.xyz"],
     proxy: {
       "/ws": {
         target: "ws://localhost:3001",
