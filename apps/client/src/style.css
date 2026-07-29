@@ -30,3 +30,25 @@ html, body, main, #world {
 h1, p { margin: 0; }
 h1 { font-size: 1rem; }
 p { margin-top: 0.25rem; color: #b2c7b7; font-size: 0.875rem; }
+
+.name-field {
+  display: block;
+  margin-top: 0.55rem;
+  color: #b2c7b7;
+  font-size: 0.8rem;
+  pointer-events: auto;
+}
+
+.name-field input {
+  width: 9rem;
+  margin-left: 0.35rem;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: 0.25rem;
+  background: rgb(255 255 255 / 12%);
+  color: #e8f1e6;
+  font: inherit;
+  padding: 0.18rem 0.35rem;
+}
+
+.roster-title { margin-top: 0.6rem; }
+#player-roster { margin: 0.2rem 0 0; padding-left: 1.1rem; color: #d5e4d4; font-size: 0.78rem; }

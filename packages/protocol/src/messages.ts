@@ -1,9 +1,16 @@
 import type { Action } from "../../simulation/src/actions";
 import type { SimulationSnapshot } from "../../simulation/src/state";
 
+export interface PlayerProfile {
+  entityId: number;
+  guestId: string;
+  displayName: string;
+}
+
 export interface WorldMessage {
   type: "world";
   playerId: number;
+  player: PlayerProfile;
   seed: number;
   width: number;
   height: number;
@@ -12,6 +19,8 @@ export interface WorldMessage {
 
 export interface SnapshotMessage extends SimulationSnapshot {
   type: "snapshot";
+  /** Profiles only for entities present in this authoritative snapshot. */
+  players: readonly PlayerProfile[];
 }
 
 export interface ActionMessage {
@@ -20,7 +29,17 @@ export interface ActionMessage {
   action: Action;
 }
 
+export interface SetDisplayNameMessage {
+  type: "set-display-name";
+  displayName: string;
+}
+
+export type ClientMessage = ActionMessage | SetDisplayNameMessage;
 export type ServerMessage = WorldMessage | SnapshotMessage;
+
+export function isClientMessage(value: unknown): value is ClientMessage {
+  return isActionMessage(value) || isSetDisplayNameMessage(value);
+}
 
 export function isActionMessage(value: unknown): value is ActionMessage {
   if (!isRecord(value) || value.type !== "action" || !isSequence(value.sequence)) return false;
@@ -28,6 +47,22 @@ export function isActionMessage(value: unknown): value is ActionMessage {
 
   return value.action.type === "idle"
     || (value.action.type === "move" && isDirection(value.action.direction));
+}
+
+export function isSetDisplayNameMessage(value: unknown): value is SetDisplayNameMessage {
+  return isRecord(value) && value.type === "set-display-name" && isDisplayName(value.displayName);
+}
+
+/** Keeps names safe to render and bounded before they enter server state. */
+export function isDisplayName(value: unknown): value is string {
+  return typeof value === "string"
+    && value.trim().length >= 1
+    && value.trim().length <= 24
+    && !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+export function normalizeDisplayName(displayName: string): string {
+  return displayName.trim().replace(/\s+/g, " ");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

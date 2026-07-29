@@ -2,12 +2,18 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
-## Current slice: M2 — authoritative WebSocket movement
+## Current slice: M3 — multiplayer guests
 
-A Bun game server owns one generated world and one player entity. It advances the
-simulation at 10 Hz, accepts sequenced movement actions through WebSocket, and
-sends an authoritative entity snapshot every tick. The browser receives terrain
-once and only renders server-confirmed positions with visual interpolation.
+The Bun server owns one generated world and an independent entity for every
+WebSocket guest. It advances the simulation at 10 Hz, resolves all player
+movement simultaneously, and broadcasts authoritative snapshots to every
+connected browser. Guests receive a monotonic entity ID, an editable display
+name, and a roster; leaving immediately removes their entity from the shared
+room. The browser renders and interpolates both local and remote players.
+
+The server is split deliberately: `server.ts` owns Bun/WebSocket transport and
+the tick scheduler, while `game-room.ts` owns room membership, input sequencing,
+identity/profile state, and simulation-facing state.
 
 ### Run locally
 
