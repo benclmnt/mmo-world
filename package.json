@@ -4,12 +4,18 @@
   "version": "0.0.0",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "world:print": "bun run packages/simulation/src/printWorld.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
   }
 }
