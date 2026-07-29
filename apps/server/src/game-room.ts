@@ -1,3 +1,4 @@
+import type { EntityId } from "../../../packages/simulation/src/Entity";
 import { generateWorld } from "../../../packages/simulation/src/generation/generateWorld";
 import { Simulation } from "../../../packages/simulation/src/Simulation";
 import type { Action } from "../../../packages/simulation/src/actions";
@@ -11,7 +12,7 @@ import {
 } from "../../../packages/protocol/src/messages";
 
 export type PlayerSession = {
-  readonly entityId: number;
+  readonly entityId: EntityId;
   readonly guestId: string;
   displayName: string;
   latestAction: Action;
@@ -26,8 +27,8 @@ export type PlayerSession = {
 export class GameRoom {
   private readonly world;
   private readonly simulation;
-  private readonly players = new Map<number, PlayerSession>();
-  private nextEntityId = 1;
+  private readonly players = new Map<EntityId, PlayerSession>();
+  private nextEntityId: EntityId = 1;
 
   constructor(seed: number) {
     this.world = generateWorld({ seed });
@@ -49,7 +50,7 @@ export class GameRoom {
     return player;
   }
 
-  leave(entityId: number): boolean {
+  leave(entityId: EntityId): boolean {
     if (!this.players.delete(entityId)) return false;
     this.simulation.removeEntity(entityId);
     return true;
@@ -70,7 +71,7 @@ export class GameRoom {
   }
 
   step(): void {
-    const actions = new Map<number, Action>();
+    const actions = new Map<EntityId, Action>();
     for (const player of this.players.values()) actions.set(player.entityId, player.latestAction);
     this.simulation.step({ actions });
   }
@@ -105,7 +106,7 @@ export class GameRoom {
     };
   }
 
-  private uniqueDisplayName(requestedName: string, entityId: number): string {
+  private uniqueDisplayName(requestedName: string, entityId: EntityId): string {
     const taken = new Set(
       [...this.players.values()]
         .filter((player) => player.entityId !== entityId)
