@@ -17,6 +17,12 @@ const movementInput = createMovementInput((action) => {
 });
 
 connect();
+requestAnimationFrame(render);
+
+function render() {
+  view?.renderFrame();
+  requestAnimationFrame(render);
+}
 
 function connect() {
   setStatus("Connecting to game server…");
