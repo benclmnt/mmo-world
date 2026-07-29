@@ -6,16 +6,51 @@ const PORT = Number(process.env.PORT ?? 3001);
 const TICKS_PER_SECOND = 10;
 const TICK_DURATION_MS = 1_000 / TICKS_PER_SECOND;
 const WORLD_SEED = Number(process.env.WORLD_SEED ?? 20260729);
+const MAX_PAYLOAD_BYTES = 4 * 1024;
+const BACKPRESSURE_LIMIT_BYTES = 256 * 1024;
+
+interface SocketState {
+  readonly socket: ServerWebSocket<PlayerSession>;
+  backpressured: boolean;
+}
 
 const room = new GameRoom(WORLD_SEED);
-const sockets = new Map<number, ServerWebSocket<PlayerSession>>();
+const sockets = new Map<number, SocketState>();
+const startedAtMs = Date.now();
+const metrics = {
+  acceptedMessages: 0,
+  invalidMessages: 0,
+  rateLimitedMessages: 0,
+  snapshotsSent: 0,
+  snapshotsSkipped: 0,
+  backpressureEvents: 0,
+  tickOverruns: 0,
+  lastTickDurationMs: 0,
+  maxTickDurationMs: 0,
+};
 
 const server = Bun.serve<PlayerSession>({
   port: PORT,
   fetch(request, server) {
-    if (new URL(request.url).pathname !== "/ws") {
-      return new Response("Not found", { status: 404 });
+    const { pathname } = new URL(request.url);
+    if (pathname === "/health") {
+      return Response.json({
+        status: "ok",
+        tick: room.tick,
+        uptimeMs: Date.now() - startedAtMs,
+      });
     }
+    if (pathname === "/metrics") {
+      return Response.json({
+        tick: room.tick,
+        players: room.playerCount,
+        bots: room.botCount,
+        connections: sockets.size,
+        uptimeMs: Date.now() - startedAtMs,
+        ...metrics,
+      });
+    }
+    if (pathname !== "/ws") return new Response("Not found", { status: 404 });
 
     let player: PlayerSession;
     try {
@@ -29,40 +64,97 @@ const server = Bun.serve<PlayerSession>({
     return new Response("WebSocket upgrade failed", { status: 400 });
   },
   websocket: {
+    maxPayloadLength: MAX_PAYLOAD_BYTES,
+    backpressureLimit: BACKPRESSURE_LIMIT_BYTES,
+    closeOnBackpressureLimit: true,
     open(socket) {
-      sockets.set(socket.data.entityId, socket);
-      send(socket, room.worldMessage(socket.data));
-      broadcastSnapshot();
-      console.info(`${socket.data.guestId} joined as entity ${socket.data.entityId}`);
+      sockets.set(socket.data.entityId, { socket, backpressured: false });
+      send(socket.data.entityId, room.worldMessage(socket.data), false);
+      send(socket.data.entityId, room.snapshotMessage(), false);
+      log("connection_open", {
+        entityId: socket.data.entityId,
+        guestId: socket.data.guestId,
+      });
     },
     message(socket, rawMessage) {
-      room.receive(socket.data, parseJson(rawMessage));
+      const result = room.receive(socket.data, parseJson(rawMessage));
+      if (result === "accepted") metrics.acceptedMessages++;
+      if (result === "invalid") metrics.invalidMessages++;
+      if (result === "rate_limited") metrics.rateLimitedMessages++;
+    },
+    drain(socket) {
+      const state = sockets.get(socket.data.entityId);
+      if (state?.backpressured) {
+        state.backpressured = false;
+        log("socket_drain", { entityId: socket.data.entityId });
+      }
     },
     close(socket) {
-      if (!sockets.delete(socket.data.entityId) || !room.leave(socket.data.entityId)) return;
+      if (
+        !sockets.delete(socket.data.entityId) ||
+        !room.leave(socket.data.entityId)
+      )
+        return;
       broadcastSnapshot();
-      console.info(`${socket.data.guestId} left entity ${socket.data.entityId}`);
+      log("connection_close", {
+        entityId: socket.data.entityId,
+        guestId: socket.data.guestId,
+      });
     },
   },
 });
 
 setInterval(() => {
+  const started = performance.now();
   room.step();
   broadcastSnapshot();
+  const durationMs = performance.now() - started;
+  metrics.lastTickDurationMs = durationMs;
+  metrics.maxTickDurationMs = Math.max(metrics.maxTickDurationMs, durationMs);
+  if (durationMs > TICK_DURATION_MS) {
+    metrics.tickOverruns++;
+    log(
+      "tick_overrun",
+      { tick: room.tick, durationMs: round(durationMs) },
+      "warn",
+    );
+  }
 }, TICK_DURATION_MS);
 
-console.info(`Game server listening on ws://0.0.0.0:${server.port}/ws (seed ${WORLD_SEED})`);
+log("server_started", {
+  port: server.port,
+  seed: WORLD_SEED,
+  ticksPerSecond: TICKS_PER_SECOND,
+});
 
 function broadcastSnapshot(): void {
   const snapshot = room.snapshotMessage();
-  for (const socket of sockets.values()) send(socket, snapshot);
+  for (const entityId of sockets.keys()) send(entityId, snapshot, true);
 }
 
-function send(socket: ServerWebSocket<PlayerSession>, message: ServerMessage): void {
+function send(
+  entityId: number,
+  message: ServerMessage,
+  disposable: boolean,
+): void {
+  const state = sockets.get(entityId);
+  if (state === undefined) return;
+  if (disposable && state.backpressured) {
+    metrics.snapshotsSkipped++;
+    return;
+  }
+
   try {
-    socket.send(JSON.stringify(message));
+    const result = state.socket.send(JSON.stringify(message));
+    if (result === -1) {
+      state.backpressured = true;
+      metrics.backpressureEvents++;
+      log("socket_backpressure", { entityId });
+    } else if (result > 0 && disposable) {
+      metrics.snapshotsSent++;
+    }
   } catch {
-    // Snapshots are disposable. The close callback performs lifecycle cleanup.
+    // The close callback owns cleanup. Snapshots are intentionally disposable.
   }
 }
 
@@ -72,4 +164,18 @@ function parseJson(rawMessage: string | Buffer): unknown {
   } catch {
     return undefined;
   }
+}
+
+function log(
+  event: string,
+  fields: Record<string, unknown>,
+  level: "info" | "warn" = "info",
+): void {
+  console[level](
+    JSON.stringify({ event, at: new Date().toISOString(), ...fields }),
+  );
+}
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
 }

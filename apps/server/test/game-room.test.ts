@@ -9,13 +9,54 @@ describe("GameRoom player lifecycle", () => {
     const first = room.join();
     const second = room.join();
 
-    expect(first).toMatchObject({ entityId: 1, guestId: "guest-1", displayName: "Guest 1" });
-    expect(second).toMatchObject({ entityId: 2, guestId: "guest-2", displayName: "Guest 2" });
-    expect(room.snapshotMessage().entities.map((entity) => entity.id)).toEqual([1, 2]);
+    expect(first).toMatchObject({
+      entityId: 1,
+      guestId: "guest-1",
+      displayName: "Guest 1",
+    });
+    expect(second).toMatchObject({
+      entityId: 2,
+      guestId: "guest-2",
+      displayName: "Guest 2",
+    });
+    expect(room.snapshotMessage().entities.map((entity) => entity.id)).toEqual([
+      1, 2,
+    ]);
 
     expect(room.leave(first.entityId)).toBe(true);
-    expect(room.snapshotMessage().entities.map((entity) => entity.id)).toEqual([2]);
+    expect(room.snapshotMessage().entities.map((entity) => entity.id)).toEqual([
+      2,
+    ]);
     expect(room.join().entityId).toBe(3);
+  });
+
+  test("rate limits a flood of otherwise valid client input", () => {
+    const room = new GameRoom(12345, { botCount: 0 });
+    const player = room.join();
+
+    for (let sequence = 0; sequence < 30; sequence++) {
+      expect(
+        room.receive(
+          player,
+          { type: "action", sequence, action: { type: "idle" } },
+          1_000,
+        ),
+      ).toBe("accepted");
+    }
+    expect(
+      room.receive(
+        player,
+        { type: "action", sequence: 30, action: { type: "idle" } },
+        1_000,
+      ),
+    ).toBe("rate_limited");
+    expect(
+      room.receive(
+        player,
+        { type: "action", sequence: 31, action: { type: "idle" } },
+        1_050,
+      ),
+    ).toBe("accepted");
   });
 
   test("retains only newer action sequences and makes display names unique", () => {
@@ -23,27 +64,41 @@ describe("GameRoom player lifecycle", () => {
     const first = room.join();
     const second = room.join();
 
-    room.receive(first, { type: "action", sequence: 4, action: { type: "move", direction: "north" } });
-    room.receive(first, { type: "action", sequence: 4, action: { type: "idle" } });
+    room.receive(first, {
+      type: "action",
+      sequence: 4,
+      action: { type: "move", direction: "north" },
+    });
+    room.receive(first, {
+      type: "action",
+      sequence: 4,
+      action: { type: "idle" },
+    });
     expect(first.latestAction).toEqual({ type: "move", direction: "north" });
 
     room.receive(first, { type: "set-display-name", displayName: "Ada" });
     room.receive(second, { type: "set-display-name", displayName: " ada " });
-    expect(room.snapshotMessage().actors.map((actor) => actor.displayName)).toEqual(["Ada", "ada 2"]);
+    expect(
+      room.snapshotMessage().actors.map((actor) => actor.displayName),
+    ).toEqual(["Ada", "ada 2"]);
   });
 });
 
 describe("GameRoom heuristic agents", () => {
   test("adds twenty visible bots spanning all three policies by default", () => {
     const room = new GameRoom(12345);
-    const bots = room.snapshotMessage().actors.filter((actor) => actor.kind === "bot");
+    const bots = room
+      .snapshotMessage()
+      .actors.filter((actor) => actor.kind === "bot");
 
     expect(bots).toHaveLength(20);
-    expect(new Set(bots.map((bot) => bot.policy))).toEqual(new Set([
-      "random-walker",
-      "persistent-wanderer",
-      "obstacle-aware-wanderer",
-    ]));
+    expect(new Set(bots.map((bot) => bot.policy))).toEqual(
+      new Set([
+        "random-walker",
+        "persistent-wanderer",
+        "obstacle-aware-wanderer",
+      ]),
+    );
     expect(room.snapshotMessage().entities).toHaveLength(20);
   });
 

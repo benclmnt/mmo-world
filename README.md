@@ -2,7 +2,7 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
-## Current slice: M4 — heuristic agents
+## Current slice: M5 — hardening and load testing
 
 The Bun server owns one generated world, an independent entity for every
 WebSocket guest, and 20 deterministic server-controlled bots. Bots cycle through
@@ -16,6 +16,19 @@ room. The browser renders and interpolates both local and remote players.
 The server is split deliberately: `server.ts` owns Bun/WebSocket transport and
 the tick scheduler, while `game-room.ts` owns room membership, input sequencing,
 identity/profile state, and simulation-facing state.
+
+### Operations
+
+- Per-connection input uses a 20-message/sec token bucket with a burst of 30.
+- WebSocket payloads are capped at 4 KiB. Slow consumers are paused after Bun
+  reports backpressure and disconnected at a 256 KiB queued-output limit.
+- `GET /health` returns liveness; `GET /metrics` returns JSON counters and tick
+  timings.
+- Run a local synthetic load check with:
+
+```bash
+bun run load --url ws://127.0.0.1:3001/ws --clients 50 --duration 30
+```
 
 ### Run locally
 

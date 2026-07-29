@@ -1,5 +1,6 @@
 import type { EntityId } from "../../../packages/simulation/src/Entity";
 import { createBot, type BotSession } from "./agents";
+import { InputRateLimiter } from "./input-rate-limiter";
 import { generateWorld } from "../../../packages/simulation/src/generation/generateWorld";
 import { Simulation } from "../../../packages/simulation/src/Simulation";
 import type { Action } from "../../../packages/simulation/src/actions";
@@ -14,6 +15,10 @@ import {
 } from "../../../packages/protocol/src/messages";
 
 const FIRST_BOT_ENTITY_ID = 1_000_000;
+const INPUT_MESSAGES_PER_SECOND = 20;
+const INPUT_BURST = 30;
+
+export type ReceiveResult = "accepted" | "invalid" | "rate_limited";
 
 export interface GameRoomOptions {
   /** Number of deterministic server-controlled agents to add at room creation. */
@@ -26,6 +31,7 @@ export type PlayerSession = {
   displayName: string;
   latestAction: Action;
   latestSequence: number;
+  readonly inputRateLimiter: InputRateLimiter;
 };
 
 /**
@@ -63,6 +69,10 @@ export class GameRoom {
       displayName: `Guest ${entityId}`,
       latestAction: { type: "idle" },
       latestSequence: -1,
+      inputRateLimiter: new InputRateLimiter(
+        INPUT_MESSAGES_PER_SECOND,
+        INPUT_BURST,
+      ),
     };
 
     this.simulation.spawnEntity(entityId, { minSeparation: 0 });
@@ -76,13 +86,19 @@ export class GameRoom {
     return true;
   }
 
-  receive(player: PlayerSession, rawMessage: unknown): void {
+  receive(
+    player: PlayerSession,
+    rawMessage: unknown,
+    nowMs = performance.now(),
+  ): ReceiveResult {
+    if (!player.inputRateLimiter.tryTake(nowMs)) return "rate_limited";
+
     if (isActionMessage(rawMessage)) {
       if (rawMessage.sequence > player.latestSequence) {
         player.latestSequence = rawMessage.sequence;
         player.latestAction = rawMessage.action;
       }
-      return;
+      return "accepted";
     }
 
     if (isSetDisplayNameMessage(rawMessage)) {
@@ -90,7 +106,22 @@ export class GameRoom {
         normalizeDisplayName(rawMessage.displayName),
         player.entityId,
       );
+      return "accepted";
     }
+
+    return "invalid";
+  }
+
+  get playerCount(): number {
+    return this.players.size;
+  }
+
+  get botCount(): number {
+    return this.bots.size;
+  }
+
+  get tick(): number {
+    return this.simulation.tick;
   }
 
   step(): void {
