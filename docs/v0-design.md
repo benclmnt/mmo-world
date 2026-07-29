@@ -110,7 +110,7 @@ Phaser client -- JSON/WebSocket --> Game server -- actions/snapshots --> Simulat
 
 The client never decides whether a movement succeeds.
 
-## Core simulation contract (proposed)
+Core simulation entity IDs are non-negative safe integers. Socket/connection IDs, display names, and any future persistent account identifiers remain separate server or presentation concerns.
 
 ```ts
 export type Direction = "north" | "south" | "east" | "west";

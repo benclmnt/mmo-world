@@ -36,7 +36,7 @@ export class Simulation {
   getEntities(): readonly Entity[] {
     return [...this.entityById.values()]
       .map((entity) => ({ ...entity }))
-      .sort((left, right) => left.id.localeCompare(right.id));
+      .sort((left, right) => left.id - right.id);
   }
 
   isOccupied(x: number, y: number): boolean {
@@ -49,6 +49,7 @@ export class Simulation {
    * policy cannot be satisfied.
    */
   spawnEntity(entityId: EntityId, options: SpawnOptions): Entity {
+    this.assertValidEntityId(entityId);
     if (this.entityById.has(entityId)) {
       throw new Error(`Entity '${entityId}' already exists`);
     }
@@ -65,6 +66,7 @@ export class Simulation {
 
   /** Places an entity at a precisely validated position for setup and tests. */
   placeEntity(entity: Entity): void {
+    this.assertValidEntityId(entity.id);
     if (this.entityById.has(entity.id)) {
       throw new Error(`Entity '${entity.id}' already exists`);
     }
@@ -100,7 +102,7 @@ export class Simulation {
     return true;
   }
 
-  private collectMovementProposals(actions: ReadonlyMap<string, Action>): Map<EntityId, Position> {
+  private collectMovementProposals(actions: ReadonlyMap<EntityId, Action>): Map<EntityId, Position> {
     const proposals = new Map<EntityId, Position>();
 
     for (const entity of this.getEntities()) {
@@ -199,7 +201,7 @@ export class Simulation {
       return states.get(entityId) === "accepted";
     };
 
-    for (const entityId of [...candidates].sort()) {
+    for (const entityId of [...candidates].sort((left, right) => left - right)) {
       resolve(entityId, []);
     }
 
@@ -219,7 +221,7 @@ export class Simulation {
       this.occupancy.delete(this.positionKey(entity.x, entity.y));
     }
 
-    for (const entityId of [...acceptedIds].sort()) {
+    for (const entityId of [...acceptedIds].sort((left, right) => left - right)) {
       const entity = this.entityById.get(entityId)!;
       const target = proposals.get(entityId)!;
       const fromX = entity.x;
@@ -231,6 +233,12 @@ export class Simulation {
     }
 
     return events;
+  }
+
+  private assertValidEntityId(entityId: EntityId): void {
+    if (!Number.isSafeInteger(entityId) || entityId < 0) {
+      throw new Error("Entity ID must be a non-negative safe integer");
+    }
   }
 
   private assertValidEntityPosition(x: number, y: number): void {
@@ -248,4 +256,9 @@ export class Simulation {
   private positionKey(x: number, y: number): number {
     return y * this.world.width + x;
   }
+}
+
+interface Position {
+  x: number;
+  y: number;
 }

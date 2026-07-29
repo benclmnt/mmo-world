@@ -1,3 +1,5 @@
+import type { EntityId } from "./Entity";
+
 export type Direction = "north" | "south" | "east" | "west";
 
 export type Action =
@@ -5,12 +7,12 @@ export type Action =
   | { type: "move"; direction: Direction };
 
 export interface StepInput {
-  actions: ReadonlyMap<string, Action>;
+  actions: ReadonlyMap<EntityId, Action>;
 }
 
 export interface MovementEvent {
   type: "moved";
-  entityId: string;
+  entityId: EntityId;
   fromX: number;
   fromY: number;
   toX: number;

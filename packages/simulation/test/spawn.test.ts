@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Entity } from "../src/Entity";
+import type { Entity, EntityId } from "../src/Entity";
 import { Simulation } from "../src/Simulation";
 import { Terrain } from "../src/Terrain";
 import { World } from "../src/World";
@@ -10,14 +10,14 @@ function grassWorld(width = 8, height = 8): World {
   return new World(1, width, height);
 }
 
-function entities(...items: Entity[]): ReadonlyMap<string, Entity> {
+function entities(...items: Entity[]): ReadonlyMap<EntityId, Entity> {
   return new Map(items.map((entity) => [entity.id, entity]));
 }
 
 describe("spawn selection", () => {
   test("chooses the same position from the same world, entities, and RNG seed", () => {
     const world = grassWorld();
-    const occupied = entities({ id: "existing", x: 3, y: 3 });
+    const occupied = entities({ id: 1, x: 3, y: 3 });
 
     const first = chooseSpawnPosition(world, occupied, new SeededRandom(99), { minSeparation: 4 });
     const second = chooseSpawnPosition(world, occupied, new SeededRandom(99), { minSeparation: 4 });
@@ -28,7 +28,7 @@ describe("spawn selection", () => {
   test("spawns only on unoccupied grass and honors Manhattan separation", () => {
     const world = grassWorld();
     world.set(7, 7, Terrain.Tree);
-    const occupied = entities({ id: "existing", x: 3, y: 3 });
+    const occupied = entities({ id: 1, x: 3, y: 3 });
 
     const spawn = chooseSpawnPosition(world, occupied, new SeededRandom(12), { minSeparation: 5 });
 
@@ -40,7 +40,7 @@ describe("spawn selection", () => {
 
   test("returns undefined rather than silently violating spacing", () => {
     const world = grassWorld(3, 3);
-    const occupied = entities({ id: "existing", x: 1, y: 1 });
+    const occupied = entities({ id: 1, x: 1, y: 1 });
 
     const spawn = chooseSpawnPosition(world, occupied, new SeededRandom(12), { minSeparation: 3 });
 
@@ -58,10 +58,10 @@ describe("spawn selection", () => {
 
 test("simulation removal frees an occupied position", () => {
   const simulation = new Simulation(new World(1, 3, 3), 2);
-  simulation.placeEntity({ id: "human-1", x: 1, y: 1 });
+  simulation.placeEntity({ id: 1, x: 1, y: 1 });
 
   expect(simulation.isOccupied(1, 1)).toBe(true);
-  expect(simulation.removeEntity("human-1")).toBe(true);
+  expect(simulation.removeEntity(1)).toBe(true);
   expect(simulation.isOccupied(1, 1)).toBe(false);
-  expect(simulation.getEntity("human-1")).toBeUndefined();
+  expect(simulation.getEntity(1)).toBeUndefined();
 });
