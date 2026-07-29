@@ -2,13 +2,15 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
-## Current slice: M3 — multiplayer guests
+## Current slice: M4 — heuristic agents
 
-The Bun server owns one generated world and an independent entity for every
-WebSocket guest. It advances the simulation at 10 Hz, resolves all player
+The Bun server owns one generated world, an independent entity for every
+WebSocket guest, and 20 deterministic server-controlled bots. Bots cycle through
+random-walker, persistent-wanderer, and obstacle-aware-wanderer policies; every
+policy emits the same move/idle actions used by people. It advances the simulation at 10 Hz, resolves all player
 movement simultaneously, and broadcasts authoritative snapshots to every
 connected browser. Guests receive a monotonic entity ID, an editable display
-name, and a roster; leaving immediately removes their entity from the shared
+name, and a roster that includes bots; leaving immediately removes their entity from the shared
 room. The browser renders and interpolates both local and remote players.
 
 The server is split deliberately: `server.ts` owns Bun/WebSocket transport and

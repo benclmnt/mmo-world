@@ -3,7 +3,7 @@ import { GameRoom } from "../src/game-room";
 
 describe("GameRoom player lifecycle", () => {
   test("assigns monotonic guest/entity IDs and removes departed players from snapshots", () => {
-    const room = new GameRoom(12345);
+    const room = new GameRoom(12345, { botCount: 0 });
     const first = room.join();
     const second = room.join();
 
@@ -17,7 +17,7 @@ describe("GameRoom player lifecycle", () => {
   });
 
   test("retains only newer action sequences and makes display names unique", () => {
-    const room = new GameRoom(12345);
+    const room = new GameRoom(12345, { botCount: 0 });
     const first = room.join();
     const second = room.join();
 
@@ -27,6 +27,32 @@ describe("GameRoom player lifecycle", () => {
 
     room.receive(first, { type: "set-display-name", displayName: "Ada" });
     room.receive(second, { type: "set-display-name", displayName: " ada " });
-    expect(room.snapshotMessage().players.map((player) => player.displayName)).toEqual(["Ada", "ada 2"]);
+    expect(room.snapshotMessage().actors.map((actor) => actor.displayName)).toEqual(["Ada", "ada 2"]);
+  });
+});
+
+describe("GameRoom heuristic agents", () => {
+  test("adds twenty visible bots spanning all three policies by default", () => {
+    const room = new GameRoom(12345);
+    const bots = room.snapshotMessage().actors.filter((actor) => actor.kind === "bot");
+
+    expect(bots).toHaveLength(20);
+    expect(new Set(bots.map((bot) => bot.policy))).toEqual(new Set([
+      "random-walker",
+      "persistent-wanderer",
+      "obstacle-aware-wanderer",
+    ]));
+    expect(room.snapshotMessage().entities).toHaveLength(20);
+  });
+
+  test("produces the same authoritative bot state for the same seed", () => {
+    const first = new GameRoom(98765);
+    const second = new GameRoom(98765);
+
+    for (let tick = 0; tick < 50; tick++) {
+      first.step();
+      second.step();
+      expect(first.snapshotMessage()).toEqual(second.snapshotMessage());
+    }
   });
 });

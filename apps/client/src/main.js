@@ -59,17 +59,27 @@ function connect() {
     if (message.type === "world") initializeWorld(message);
     if (message.type === "snapshot") applySnapshot(message);
   });
-  socket.addEventListener("close", () => setStatus("Disconnected · reload to reconnect"));
-  socket.addEventListener("error", () => setStatus("Unable to reach game server"));
+  socket.addEventListener("close", () =>
+    setStatus("Disconnected · reload to reconnect"),
+  );
+  socket.addEventListener("error", () =>
+    setStatus("Unable to reach game server"),
+  );
 }
 
 function initializeWorld(message) {
-  world = new World(message.seed, message.width, message.height, new Uint8Array(message.tiles));
+  world = new World(
+    message.seed,
+    message.width,
+    message.height,
+    new Uint8Array(message.tiles),
+  );
   playerId = message.playerId;
   followedPlayerId = playerId;
   nextActionSequence = 0;
   worldSeed.textContent = String(world.seed);
-  if (playerName.value.trim().length === 0) playerName.value = message.player.displayName;
+  if (playerName.value.trim().length === 0)
+    playerName.value = message.player.displayName;
   setStatus("Connected · waiting for first snapshot…");
 }
 
@@ -79,35 +89,49 @@ function applySnapshot(message) {
   const player = message.entities.find((entity) => entity.id === playerId);
   if (player === undefined) return;
 
-  if (!message.entities.some((entity) => entity.id === followedPlayerId)) followedPlayerId = playerId;
+  if (!message.entities.some((entity) => entity.id === followedPlayerId))
+    followedPlayerId = playerId;
 
   if (view === undefined) {
-    view = createWorldView(document.querySelector("#world"), world, playerId, message.entities);
+    view = createWorldView(
+      document.querySelector("#world"),
+      world,
+      playerId,
+      message.entities,
+    );
     sendAction();
   }
 
   view.applySnapshot(message.entities);
   view.setFollowEntity(followedPlayerId);
-  renderRoster(message.players, message.entities);
-  setStatus(`Tile ${player.x}, ${player.y} · ${message.players.length} player${message.players.length === 1 ? "" : "s"} · server tick ${message.tick}`);
+  renderRoster(message.actors, message.entities);
+  const botCount = message.actors.filter(
+    (actor) => actor.kind === "bot",
+  ).length;
+  const playerCount = message.actors.length - botCount;
+  setStatus(
+    `Tile ${player.x}, ${player.y} · ${playerCount} player${playerCount === 1 ? "" : "s"} · ${botCount} bot${botCount === 1 ? "" : "s"} · server tick ${message.tick}`,
+  );
 }
 
-function renderRoster(players, entities) {
+function renderRoster(actors, entities) {
   const positions = new Map(entities.map((entity) => [entity.id, entity]));
-  roster.replaceChildren(...players.map((player) => {
-    const item = document.createElement("li");
-    const button = document.createElement("button");
-    const position = positions.get(player.entityId);
-    const isFollowed = player.entityId === followedPlayerId;
-    button.type = "button";
-    button.dataset.entityId = String(player.entityId);
-    button.className = "roster-player";
-    button.classList.toggle("is-followed", isFollowed);
-    button.setAttribute("aria-pressed", String(isFollowed));
-    button.textContent = `${player.entityId === playerId ? "You · " : ""}${player.displayName}${position ? ` · ${position.x}, ${position.y}` : ""}`;
-    item.append(button);
-    return item;
-  }));
+  roster.replaceChildren(
+    ...actors.map((player) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      const position = positions.get(player.entityId);
+      const isFollowed = player.entityId === followedPlayerId;
+      button.type = "button";
+      button.dataset.entityId = String(player.entityId);
+      button.className = "roster-player";
+      button.classList.toggle("is-followed", isFollowed);
+      button.setAttribute("aria-pressed", String(isFollowed));
+      button.textContent = `${player.entityId === playerId ? "You · " : ""}${player.displayName}${player.kind === "bot" ? " · bot" : ""}${position ? ` · ${position.x}, ${position.y}` : ""}`;
+      item.append(button);
+      return item;
+    }),
+  );
 }
 
 function selectFollowTarget(event) {
@@ -128,7 +152,11 @@ function selectFollowTarget(event) {
 }
 
 function sendAction() {
-  send({ type: "action", sequence: nextActionSequence++, action: latestAction });
+  send({
+    type: "action",
+    sequence: nextActionSequence++,
+    action: latestAction,
+  });
 }
 
 function send(message) {
@@ -144,7 +172,9 @@ function webSocketUrl() {
 function parseMessage(rawMessage) {
   try {
     const message = JSON.parse(rawMessage);
-    return message !== null && typeof message === "object" ? message : undefined;
+    return message !== null && typeof message === "object"
+      ? message
+      : undefined;
   } catch {
     return undefined;
   }

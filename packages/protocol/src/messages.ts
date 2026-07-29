@@ -3,9 +3,19 @@ import type { SimulationSnapshot } from "../../simulation/src/state";
 
 export interface PlayerProfile {
   entityId: number;
+  kind: "player";
   guestId: string;
   displayName: string;
 }
+
+export interface BotProfile {
+  entityId: number;
+  kind: "bot";
+  displayName: string;
+  policy: "random-walker" | "persistent-wanderer" | "obstacle-aware-wanderer";
+}
+
+export type ActorProfile = PlayerProfile | BotProfile;
 
 export interface WorldMessage {
   type: "world";
@@ -20,7 +30,7 @@ export interface WorldMessage {
 export interface SnapshotMessage extends SimulationSnapshot {
   type: "snapshot";
   /** Profiles only for entities present in this authoritative snapshot. */
-  players: readonly PlayerProfile[];
+  actors: readonly ActorProfile[];
 }
 
 export interface ActionMessage {
@@ -42,23 +52,38 @@ export function isClientMessage(value: unknown): value is ClientMessage {
 }
 
 export function isActionMessage(value: unknown): value is ActionMessage {
-  if (!isRecord(value) || value.type !== "action" || !isSequence(value.sequence)) return false;
+  if (
+    !isRecord(value) ||
+    value.type !== "action" ||
+    !isSequence(value.sequence)
+  )
+    return false;
   if (!isRecord(value.action)) return false;
 
-  return value.action.type === "idle"
-    || (value.action.type === "move" && isDirection(value.action.direction));
+  return (
+    value.action.type === "idle" ||
+    (value.action.type === "move" && isDirection(value.action.direction))
+  );
 }
 
-export function isSetDisplayNameMessage(value: unknown): value is SetDisplayNameMessage {
-  return isRecord(value) && value.type === "set-display-name" && isDisplayName(value.displayName);
+export function isSetDisplayNameMessage(
+  value: unknown,
+): value is SetDisplayNameMessage {
+  return (
+    isRecord(value) &&
+    value.type === "set-display-name" &&
+    isDisplayName(value.displayName)
+  );
 }
 
 /** Keeps names safe to render and bounded before they enter server state. */
 export function isDisplayName(value: unknown): value is string {
-  return typeof value === "string"
-    && value.trim().length >= 1
-    && value.trim().length <= 24
-    && !/[\u0000-\u001f\u007f]/.test(value);
+  return (
+    typeof value === "string" &&
+    value.trim().length >= 1 &&
+    value.trim().length <= 24 &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
 }
 
 export function normalizeDisplayName(displayName: string): string {
@@ -73,6 +98,13 @@ function isSequence(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function isDirection(value: unknown): value is "north" | "south" | "east" | "west" {
-  return value === "north" || value === "south" || value === "east" || value === "west";
+function isDirection(
+  value: unknown,
+): value is "north" | "south" | "east" | "west" {
+  return (
+    value === "north" ||
+    value === "south" ||
+    value === "east" ||
+    value === "west"
+  );
 }
