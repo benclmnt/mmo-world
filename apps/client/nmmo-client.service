@@ -1,0 +1,15 @@
+[Unit]
+Description=Realtime World browser client
+After=network.target nmmo-server.service
+Wants=nmmo-server.service
+
+[Service]
+Type=simple
+User=exedev
+WorkingDirectory=/home/exedev/nmmo
+ExecStart=/home/exedev/.local/bin/node ./node_modules/vite/bin/vite.js --host 0.0.0.0
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
