@@ -49,7 +49,9 @@ export function createWorldView(canvas, world, initialPlayer) {
   });
 
   return {
-    movePlayerTo(player) {
+    applyPlayerSnapshot(player) {
+      // The server owns movement. Rendering eases between 10 Hz snapshots
+      // without predicting whether a requested move will succeed.
       playerTarget.set(player.x, 0, player.y);
     },
     renderFrame() {

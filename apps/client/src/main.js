@@ -1,46 +1,85 @@
-import { generateWorld } from "../../../packages/simulation/src/generation/generateWorld.ts";
-import { Simulation } from "../../../packages/simulation/src/Simulation.ts";
+import { World } from "../../../packages/simulation/src/World.ts";
 import { createMovementInput } from "./input.js";
 import { createWorldView } from "./world-view.js";
 
-const WORLD_SEED = 20260729;
-const PLAYER_ID = 1;
-const TICKS_PER_SECOND = 10;
-const TICK_DURATION_MS = 1_000 / TICKS_PER_SECOND;
-const world = generateWorld({ seed: WORLD_SEED });
-const simulation = new Simulation(world);
-const player = simulation.spawnEntity(PLAYER_ID, { minSeparation: 0 });
-const view = createWorldView(document.querySelector("#world"), world, player);
-const movementInput = createMovementInput();
 const playerStatus = document.querySelector("#player-status");
-let previousFrameTime = performance.now();
-let accumulatedTickTime = 0;
+const worldSeed = document.querySelector("#world-seed");
+let socket;
+let playerId;
+let world;
+let view;
+let nextActionSequence = 0;
+let latestAction = { type: "idle" };
 
-document.querySelector("#world-seed").textContent = String(WORLD_SEED);
+const movementInput = createMovementInput((action) => {
+  latestAction = action;
+  sendAction();
+});
 
-function tickSimulation() {
-  // This runs even with no key held; currentAction() is then an idle action.
-  const action = movementInput.currentAction();
-  simulation.step({ actions: new Map([[PLAYER_ID, action]]) });
+connect();
 
-  const updatedPlayer = simulation.getEntity(PLAYER_ID);
-  view.movePlayerTo(updatedPlayer);
-  playerStatus.textContent = `Tile ${updatedPlayer.x}, ${updatedPlayer.y} · tick ${simulation.tick}`;
+function connect() {
+  setStatus("Connecting to game server…");
+  socket = new WebSocket(webSocketUrl());
+
+  socket.addEventListener("open", () => setStatus("Connected · waiting for world…"));
+  socket.addEventListener("message", (event) => {
+    const message = parseMessage(event.data);
+    if (message === undefined) return;
+
+    if (message.type === "world") initializeWorld(message);
+    if (message.type === "snapshot") applySnapshot(message);
+  });
+  socket.addEventListener("close", () => setStatus("Disconnected · reload to reconnect"));
+  socket.addEventListener("error", () => setStatus("Unable to reach game server"));
 }
 
-function render(currentFrameTime) {
-  // The simulation advances at a fixed 10 Hz; rendering remains as fast as it can.
-  const elapsed = Math.min(currentFrameTime - previousFrameTime, 250);
-  previousFrameTime = currentFrameTime;
-  accumulatedTickTime += elapsed;
+function initializeWorld(message) {
+  world = new World(message.seed, message.width, message.height, new Uint8Array(message.tiles));
+  playerId = message.playerId;
+  worldSeed.textContent = String(world.seed);
+  setStatus("Connected · waiting for first snapshot…");
+}
 
-  while (accumulatedTickTime >= TICK_DURATION_MS) {
-    tickSimulation();
-    accumulatedTickTime -= TICK_DURATION_MS;
+function applySnapshot(message) {
+  if (world === undefined || playerId === undefined) return;
+
+  const player = message.entities.find((entity) => entity.id === playerId);
+  if (player === undefined) return;
+
+  if (view === undefined) {
+    view = createWorldView(document.querySelector("#world"), world, player);
+    sendAction();
   }
 
-  view.renderFrame();
-  requestAnimationFrame(render);
+  view.applyPlayerSnapshot(player);
+  setStatus(`Tile ${player.x}, ${player.y} · server tick ${message.tick}`);
 }
 
-requestAnimationFrame(render);
+function sendAction() {
+  if (socket?.readyState !== WebSocket.OPEN || playerId === undefined) return;
+
+  socket.send(JSON.stringify({
+    type: "action",
+    sequence: nextActionSequence++,
+    action: latestAction,
+  }));
+}
+
+function webSocketUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws`;
+}
+
+function parseMessage(rawMessage) {
+  try {
+    const message = JSON.parse(rawMessage);
+    return message !== null && typeof message === "object" ? message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function setStatus(text) {
+  playerStatus.textContent = text;
+}

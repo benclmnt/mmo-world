@@ -13,7 +13,7 @@ const directionForCode = {
  * Tracks held movement keys. The most recently pressed held key wins when
  * several directions are held, which makes changing direction predictable.
  */
-export function createMovementInput() {
+export function createMovementInput(onActionChange) {
   const heldKeys = new Map();
   let pressOrder = 0;
 
@@ -24,6 +24,7 @@ export function createMovementInput() {
     event.preventDefault();
     if (!heldKeys.has(event.code)) {
       heldKeys.set(event.code, { direction, order: pressOrder++ });
+      onActionChange?.(currentAction());
     }
   });
 
@@ -32,20 +33,21 @@ export function createMovementInput() {
 
     event.preventDefault();
     heldKeys.delete(event.code);
+    onActionChange?.(currentAction());
   });
 
-  return {
-    currentAction() {
-      let latestHeldKey;
-      for (const heldKey of heldKeys.values()) {
-        if (latestHeldKey === undefined || heldKey.order > latestHeldKey.order) {
-          latestHeldKey = heldKey;
-        }
+  function currentAction() {
+    let latestHeldKey;
+    for (const heldKey of heldKeys.values()) {
+      if (latestHeldKey === undefined || heldKey.order > latestHeldKey.order) {
+        latestHeldKey = heldKey;
       }
+    }
 
-      return latestHeldKey === undefined
-        ? { type: "idle" }
-        : { type: "move", direction: latestHeldKey.direction };
-    },
-  };
+    return latestHeldKey === undefined
+      ? { type: "idle" }
+      : { type: "move", direction: latestHeldKey.direction };
+  }
+
+  return { currentAction };
 }

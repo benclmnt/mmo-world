@@ -6,6 +6,12 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 8000,
     allowedHosts: ["benclmntdevbox0.exe.xyz"],
+    proxy: {
+      "/ws": {
+        target: "ws://localhost:3001",
+        ws: true,
+      },
+    },
   },
   build: {
     outDir: "../../dist/client",
