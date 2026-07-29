@@ -18,6 +18,13 @@ function actions(entries: readonly [EntityId, Action][]): ReadonlyMap<EntityId, 
 }
 
 describe("simultaneous movement", () => {
+  test("advances the tick when every entity is idle", () => {
+    const simulation = simulationWith({ id: 1, x: 1, y: 1 });
+
+    expect(simulation.step({ actions: actions([]) })).toEqual({ tick: 1, events: [] });
+    expect(simulation.getEntity(1)).toEqual({ id: 1, x: 1, y: 1 });
+  });
+
   test("moves onto an empty walkable tile", () => {
     const simulation = simulationWith({ id: 1, x: 1, y: 1 });
 

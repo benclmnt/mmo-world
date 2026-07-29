@@ -1,25 +1,51 @@
-const directionForKey = {
+const directionForCode = {
   ArrowUp: "north",
-  w: "north",
-  W: "north",
+  KeyW: "north",
   ArrowDown: "south",
-  s: "south",
-  S: "south",
+  KeyS: "south",
   ArrowLeft: "west",
-  a: "west",
-  A: "west",
+  KeyA: "west",
   ArrowRight: "east",
-  d: "east",
-  D: "east",
+  KeyD: "east",
 };
 
-/** Calls onMove once for each supported, non-repeated keyboard press. */
-export function bindMovementInput(onMove) {
+/**
+ * Tracks held movement keys. The most recently pressed held key wins when
+ * several directions are held, which makes changing direction predictable.
+ */
+export function createMovementInput() {
+  const heldKeys = new Map();
+  let pressOrder = 0;
+
   window.addEventListener("keydown", (event) => {
-    const direction = directionForKey[event.key];
-    if (direction === undefined || event.repeat) return;
+    const direction = directionForCode[event.code];
+    if (direction === undefined) return;
 
     event.preventDefault();
-    onMove(direction);
+    if (!heldKeys.has(event.code)) {
+      heldKeys.set(event.code, { direction, order: pressOrder++ });
+    }
   });
+
+  window.addEventListener("keyup", (event) => {
+    if (directionForCode[event.code] === undefined) return;
+
+    event.preventDefault();
+    heldKeys.delete(event.code);
+  });
+
+  return {
+    currentAction() {
+      let latestHeldKey;
+      for (const heldKey of heldKeys.values()) {
+        if (latestHeldKey === undefined || heldKey.order > latestHeldKey.order) {
+          latestHeldKey = heldKey;
+        }
+      }
+
+      return latestHeldKey === undefined
+        ? { type: "idle" }
+        : { type: "move", direction: latestHeldKey.direction };
+    },
+  };
 }
