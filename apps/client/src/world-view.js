@@ -46,8 +46,8 @@ export function createWorldView(canvas, world, initialPlayer) {
     renderFrame() {
       const smoothing = 1 - Math.exp(-12 * clock.getDelta());
       playerMesh.position.lerp(playerTarget, smoothing);
-      cameraTarget.set(playerMesh.position.x, 0, playerMesh.position.z).add(cameraPan);
-      cameraDesired.copy(cameraTarget).add(cameraOffset);
+      cameraTarget.set(playerMesh.position.x, 0, playerMesh.position.z);
+      cameraDesired.copy(cameraTarget).add(cameraOffset).add(cameraPan);
       camera.position.lerp(cameraDesired, smoothing);
       camera.lookAt(cameraTarget);
       renderer.render(scene, camera);
@@ -87,7 +87,7 @@ function createPlayerMesh(player) {
   return group;
 }
 
-/** Right-drag pans the camera target across the X/Z ground plane. */
+/** Right-drag moves the camera across the X/Z ground plane while it keeps looking at the player. */
 function enableCameraPanning(canvas, camera, cameraPan, cameraForward, cameraRight) {
   let activePointerId;
   let previousX = 0;
