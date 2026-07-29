@@ -1,4 +1,5 @@
 import type { Entity, EntityId } from "./Entity";
+import type { AgentObservation, SimulationSnapshot } from "./state";
 import type { Action, MovementEvent, StepInput, StepResult } from "./actions";
 import { isWalkable } from "./Terrain";
 import { SeededRandom } from "./generation/rng";
@@ -37,6 +38,43 @@ export class Simulation {
     return [...this.entityById.values()]
       .map((entity) => ({ ...entity }))
       .sort((left, right) => left.id - right.id);
+  }
+
+  /**
+   * Returns an independent, deterministic view of the dynamic state. Static
+   * world terrain is intentionally omitted: it is defined once by `world`.
+   */
+  createSnapshot(): SimulationSnapshot {
+    return { tick: this.tick, entities: this.getEntities() };
+  }
+
+  /**
+   * Returns the 9×9 terrain/entity window centered on an existing entity.
+   * Out-of-bounds terrain cells are represented by null.
+   */
+  observeAgent(entityId: EntityId): AgentObservation {
+    const self = this.getEntity(entityId);
+    if (self === undefined) {
+      throw new Error(`Entity '${entityId}' does not exist`);
+    }
+
+    const radius = 4;
+    const originX = self.x - radius;
+    const originY = self.y - radius;
+    const terrain = [];
+    for (let y = originY; y <= self.y + radius; y++) {
+      for (let x = originX; x <= self.x + radius; x++) {
+        terrain.push(this.world.inBounds(x, y) ? this.world.get(x, y) : null);
+      }
+    }
+
+    const maxX = self.x + radius;
+    const maxY = self.y + radius;
+    const entities = this.getEntities().filter(
+      (entity) => entity.x >= originX && entity.x <= maxX && entity.y >= originY && entity.y <= maxY,
+    );
+
+    return { tick: this.tick, self, originX, originY, terrain, entities };
   }
 
   isOccupied(x: number, y: number): boolean {
