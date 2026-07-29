@@ -18,10 +18,10 @@ export function addTerrainMeshes(world, group) {
     }
   }
 
-  addTileInstances(group, grass, 0x5a9b50, 0.16);
-  addTileInstances(group, water, 0x3a86b9, 0.08);
-  addTileInstances(group, rock, 0x788078, 0.48);
-  addTileInstances(group, trees, 0x4a8747, 0.16);
+  addFlatTileInstances(group, grass, 0x5a9b50, 0.16);
+  addFlatTileInstances(group, water, 0x3a86b9, 0.08);
+  addBoxTileInstances(group, rock, 0x788078, 0.48);
+  addFlatTileInstances(group, trees, 0x4a8747, 0.16);
   addTreeInstances(group, trees);
 }
 
@@ -29,9 +29,27 @@ export function addTerrainMeshes(world, group) {
  * InstancedMesh draws many copies of one geometry/material in one draw call.
  * It is a good fit for a world made from thousands of repeated tiles.
  */
-function addTileInstances(group, positions, color, height) {
+function addFlatTileInstances(group, positions, color, surfaceHeight) {
   const mesh = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(0.98, height, 0.98),
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.95 }),
+    positions.length,
+  );
+  const matrix = new THREE.Matrix4();
+
+  positions.forEach(([x, y], index) => {
+    matrix.makeRotationX(-Math.PI / 2);
+    matrix.setPosition(x, surfaceHeight, y);
+    mesh.setMatrixAt(index, matrix);
+  });
+
+  mesh.receiveShadow = true;
+  group.add(mesh);
+}
+
+function addBoxTileInstances(group, positions, color, height) {
+  const mesh = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(1, height, 1),
     new THREE.MeshStandardMaterial({ color, roughness: 0.95 }),
     positions.length,
   );
