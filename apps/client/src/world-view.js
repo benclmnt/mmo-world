@@ -58,8 +58,11 @@ export function createWorldView(canvas, world, initialPlayer) {
       const smoothing = 1 - Math.exp(-12 * clock.getDelta());
       playerMesh.position.lerp(playerTarget, smoothing);
       cameraTarget.set(playerMesh.position.x, 0, playerMesh.position.z);
+      // Follow the already-interpolated player directly. A second camera lerp
+      // made the look target and camera position converge at different rates,
+      // which produced a visible wobble while moving.
       cameraDesired.copy(cameraOffset).multiplyScalar(cameraControls.zoom).add(cameraTarget).add(cameraPan);
-      camera.position.lerp(cameraDesired, smoothing);
+      camera.position.copy(cameraDesired);
       camera.lookAt(cameraTarget);
       renderer.render(scene, camera);
     },
