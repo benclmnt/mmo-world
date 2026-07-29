@@ -1,0 +1,15 @@
+[Unit]
+Description=Realtime World game server
+After=network.target
+
+[Service]
+Type=simple
+User=exedev
+WorkingDirectory=/home/exedev/nmmo
+Environment=PORT=3001
+ExecStart=/home/exedev/.local/bin/bun run apps/server/src/server.ts
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
