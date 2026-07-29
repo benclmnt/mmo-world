@@ -12,6 +12,7 @@ export function createWorldView(canvas, world, initialPlayer) {
   const cameraPan = new THREE.Vector3();
   const cameraTarget = new THREE.Vector3(initialPlayer.x, 0, initialPlayer.y);
   const cameraDesired = new THREE.Vector3();
+  const cameraControls = { zoom: 1 };
   const cameraForward = new THREE.Vector3();
   const cameraRight = new THREE.Vector3();
   camera.position.copy(cameraTarget).add(cameraOffset);
@@ -31,7 +32,15 @@ export function createWorldView(canvas, world, initialPlayer) {
   scene.add(playerMesh);
   const playerTarget = playerMesh.position.clone();
   const clock = new THREE.Clock();
-  enableCameraPanning(canvas, camera, cameraPan, cameraForward, cameraRight);
+  enableCameraControls(
+    canvas,
+    camera,
+    cameraPan,
+    cameraForward,
+    cameraRight,
+    cameraControls,
+    Math.max(world.width, world.height) / 2,
+  );
 
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -47,7 +56,7 @@ export function createWorldView(canvas, world, initialPlayer) {
       const smoothing = 1 - Math.exp(-12 * clock.getDelta());
       playerMesh.position.lerp(playerTarget, smoothing);
       cameraTarget.set(playerMesh.position.x, 0, playerMesh.position.z);
-      cameraDesired.copy(cameraTarget).add(cameraOffset).add(cameraPan);
+      cameraDesired.copy(cameraOffset).multiplyScalar(cameraControls.zoom).add(cameraTarget).add(cameraPan);
       camera.position.lerp(cameraDesired, smoothing);
       camera.lookAt(cameraTarget);
       renderer.render(scene, camera);
@@ -87,8 +96,8 @@ function createPlayerMesh(player) {
   return group;
 }
 
-/** Right-drag moves the camera across the X/Z ground plane while it keeps looking at the player. */
-function enableCameraPanning(canvas, camera, cameraPan, cameraForward, cameraRight) {
+/** Adds panning, zoom, and reset controls without changing the player's simulation state. */
+function enableCameraControls(canvas, camera, cameraPan, cameraForward, cameraRight, controls, maxPan) {
   let activePointerId;
   let previousX = 0;
   let previousY = 0;
@@ -117,11 +126,23 @@ function enableCameraPanning(canvas, camera, cameraPan, cameraForward, cameraRig
     cameraRight.crossVectors(cameraForward, camera.up).normalize();
     cameraPan.addScaledVector(cameraRight, -deltaX * 0.035);
     cameraPan.addScaledVector(cameraForward, -deltaY * 0.035);
+    cameraPan.x = THREE.MathUtils.clamp(cameraPan.x, -maxPan, maxPan);
+    cameraPan.z = THREE.MathUtils.clamp(cameraPan.z, -maxPan, maxPan);
   });
   canvas.addEventListener("pointerup", (event) => {
     if (event.pointerId !== activePointerId) return;
 
     canvas.releasePointerCapture(activePointerId);
     activePointerId = undefined;
+  });
+  canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    controls.zoom = THREE.MathUtils.clamp(controls.zoom + event.deltaY * 0.001, 0.6, 1.8);
+  }, { passive: false });
+  window.addEventListener("keydown", (event) => {
+    if (event.code !== "KeyR" || event.repeat) return;
+
+    controls.zoom = 1;
+    cameraPan.set(0, 0, 0);
   });
 }
