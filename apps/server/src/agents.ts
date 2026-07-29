@@ -82,25 +82,20 @@ class PersistentWanderer implements BotController {
 }
 
 class ObstacleAwareWanderer implements BotController {
-  private direction: Direction | undefined;
-
   constructor(private readonly random: SeededRandom) {}
 
   nextAction(observation: AgentObservation): Action {
-    if (this.direction !== undefined && isOpen(observation, this.direction)) {
-      return { type: "move", direction: this.direction };
-    }
-
+    // Pick afresh each tick. Holding a heading here can make two scouts keep
+    // proposing the same contested tile forever, even though alternatives are
+    // available. The random rotation remains deterministic per bot.
     const start = this.random.nextInt(directions.length);
     for (let offset = 0; offset < directions.length; offset++) {
       const candidate = directions[(start + offset) % directions.length]!;
       if (isOpen(observation, candidate)) {
-        this.direction = candidate;
         return { type: "move", direction: candidate };
       }
     }
 
-    this.direction = undefined;
     return { type: "idle" };
   }
 }

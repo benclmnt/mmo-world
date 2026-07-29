@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { createBot } from "../src/agents";
 import { GameRoom } from "../src/game-room";
+import { Terrain } from "../../../packages/simulation/src/Terrain";
 
 describe("GameRoom player lifecycle", () => {
   test("assigns monotonic guest/entity IDs and removes departed players from snapshots", () => {
@@ -45,6 +47,23 @@ describe("GameRoom heuristic agents", () => {
     expect(room.snapshotMessage().entities).toHaveLength(20);
   });
 
+  test("reconsiders an open heading every tick so scouts cannot hold a collision deadlock", () => {
+    const scout = createBot(100, 2, 12345);
+    const observation = {
+      tick: 0,
+      self: { id: 100, x: 10, y: 10 },
+      originX: 6,
+      originY: 6,
+      terrain: Array(81).fill(Terrain.Grass),
+      entities: [{ id: 100, x: 10, y: 10 }],
+    };
+    const directions = Array.from({ length: 8 }, () => {
+      const action = scout.controller.nextAction(observation);
+      return action.type === "move" ? action.direction : "idle";
+    });
+
+    expect(new Set(directions).size).toBeGreaterThan(1);
+  });
   test("produces the same authoritative bot state for the same seed", () => {
     const first = new GameRoom(98765);
     const second = new GameRoom(98765);

@@ -20,7 +20,10 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
   camera.lookAt(cameraTarget);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // A 64×64 world has dense visual detail. A modest DPR and shadow map cap
+  // avoid spending an excessive amount of GPU time per animation frame on
+  // high-density displays while preserving a sharp tile view.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
 
@@ -100,7 +103,7 @@ function addLights(scene) {
   const sun = new THREE.DirectionalLight(0xfff3d1, 2.4);
   sun.position.set(35, 70, 20);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   scene.add(sun);
 }
 
