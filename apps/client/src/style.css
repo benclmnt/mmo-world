@@ -52,3 +52,19 @@ p { margin-top: 0.25rem; color: #b2c7b7; font-size: 0.875rem; }
 
 .roster-title { margin-top: 0.6rem; }
 #player-roster { margin: 0.2rem 0 0; padding-left: 1.1rem; color: #d5e4d4; font-size: 0.78rem; }
+#player-roster li { pointer-events: auto; }
+
+.roster-player {
+  appearance: none;
+  border: 0;
+  padding: 0.08rem 0.2rem;
+  border-radius: 0.2rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.roster-player:hover, .roster-player:focus-visible { background: rgb(255 255 255 / 15%); outline: none; }
+.roster-player.is-followed { color: #ffdc76; }

@@ -12,6 +12,13 @@ let world;
 let view;
 let nextActionSequence = 0;
 let latestAction = { type: "idle" };
+let followedPlayerId;
+
+// The roster is rebuilt with each 10 Hz snapshot. Handle selection on this
+// stable parent at pointer-down time, before a snapshot can replace a button
+// between its pointer-down and click events.
+roster.addEventListener("pointerdown", selectFollowTarget);
+roster.addEventListener("click", selectFollowTarget);
 
 playerName.value = localStorage.getItem("realtime-world.display-name") ?? "";
 playerName.addEventListener("change", () => {
@@ -59,6 +66,7 @@ function connect() {
 function initializeWorld(message) {
   world = new World(message.seed, message.width, message.height, new Uint8Array(message.tiles));
   playerId = message.playerId;
+  followedPlayerId = playerId;
   nextActionSequence = 0;
   worldSeed.textContent = String(world.seed);
   if (playerName.value.trim().length === 0) playerName.value = message.player.displayName;
@@ -71,12 +79,15 @@ function applySnapshot(message) {
   const player = message.entities.find((entity) => entity.id === playerId);
   if (player === undefined) return;
 
+  if (!message.entities.some((entity) => entity.id === followedPlayerId)) followedPlayerId = playerId;
+
   if (view === undefined) {
     view = createWorldView(document.querySelector("#world"), world, playerId, message.entities);
     sendAction();
   }
 
   view.applySnapshot(message.entities);
+  view.setFollowEntity(followedPlayerId);
   renderRoster(message.players, message.entities);
   setStatus(`Tile ${player.x}, ${player.y} · ${message.players.length} player${message.players.length === 1 ? "" : "s"} · server tick ${message.tick}`);
 }
@@ -85,10 +96,35 @@ function renderRoster(players, entities) {
   const positions = new Map(entities.map((entity) => [entity.id, entity]));
   roster.replaceChildren(...players.map((player) => {
     const item = document.createElement("li");
+    const button = document.createElement("button");
     const position = positions.get(player.entityId);
-    item.textContent = `${player.entityId === playerId ? "You · " : ""}${player.displayName}${position ? ` · ${position.x}, ${position.y}` : ""}`;
+    const isFollowed = player.entityId === followedPlayerId;
+    button.type = "button";
+    button.dataset.entityId = String(player.entityId);
+    button.className = "roster-player";
+    button.classList.toggle("is-followed", isFollowed);
+    button.setAttribute("aria-pressed", String(isFollowed));
+    button.textContent = `${player.entityId === playerId ? "You · " : ""}${player.displayName}${position ? ` · ${position.x}, ${position.y}` : ""}`;
+    item.append(button);
     return item;
   }));
+}
+
+function selectFollowTarget(event) {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest(".roster-player");
+  if (button === null) return;
+
+  const entityId = Number(button.dataset.entityId);
+  if (!Number.isSafeInteger(entityId)) return;
+
+  followedPlayerId = entityId;
+  view?.setFollowEntity(entityId);
+  for (const rosterButton of roster.querySelectorAll(".roster-player")) {
+    const isFollowed = Number(rosterButton.dataset.entityId) === entityId;
+    rosterButton.classList.toggle("is-followed", isFollowed);
+    rosterButton.setAttribute("aria-pressed", String(isFollowed));
+  }
 }
 
 function sendAction() {

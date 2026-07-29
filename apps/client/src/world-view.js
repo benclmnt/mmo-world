@@ -30,6 +30,7 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
   addTerrainMeshes(world, terrainGroup);
 
   const players = new Map();
+  let followedEntityId = playerId;
   for (const entity of initialEntities) addPlayer(entity);
   const clock = new THREE.Clock();
   enableCameraControls(
@@ -64,13 +65,16 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
         player.target.set(entity.x, 0, entity.y);
       }
     },
+    setFollowEntity(entityId) {
+      followedEntityId = players.has(entityId) ? entityId : playerId;
+    },
     renderFrame() {
       const smoothing = 1 - Math.exp(-12 * clock.getDelta());
       for (const player of players.values()) player.mesh.position.lerp(player.target, smoothing);
 
-      const localPlayer = players.get(playerId);
-      if (localPlayer === undefined) return;
-      cameraTarget.set(localPlayer.mesh.position.x, 0, localPlayer.mesh.position.z);
+      const followedPlayer = players.get(followedEntityId) ?? players.get(playerId);
+      if (followedPlayer === undefined) return;
+      cameraTarget.set(followedPlayer.mesh.position.x, 0, followedPlayer.mesh.position.z);
       // Follow the already-interpolated player directly. A second camera lerp
       // made the look target and camera position converge at different rates,
       // which produced a visible wobble while moving.
