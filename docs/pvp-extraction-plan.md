@@ -21,7 +21,8 @@ safe camp → choose a route → gather in the wilderness → encounter players
     └──── respawn / bank loot ← win, escape, or get knocked out ┘
 ```
 
-1. **Start safe.** A player enters at a camp where they cannot be attacked.
+1. **Start safe.** A player enters at the protected home camp where they cannot
+   be attacked.
 2. **Venture out.** Trees and rocks in the wilderness yield wood and stone.
 3. **Carry risk.** Gathered resources are *unsecured*: they are valuable but can
    be lost if the player is knocked out.
@@ -39,10 +40,15 @@ before it adds equipment, crafting, guilds, or permanent territory.
 
 ### World and safety
 
-- Each player spawns at a protected camp. Attacks do no damage in the camp's
-  safety radius.
-- Leaving that radius enables PvP. The UI clearly shows whether the player is
-  protected or vulnerable.
+- The map starts with **one central home camp** and **two field camps**. Their
+  safe radii are deliberately small and clearly marked.
+- The home camp is the only respawn point and provides the full secured stash.
+  Field camps are deposit-only extraction points: they do not provide respawns
+  or other full services.
+- Attacks do no damage within a camp's safety radius. Valuable resource nodes
+  must remain outside those radii.
+- Leaving a camp's radius enables PvP. The UI clearly shows whether the player
+  is protected or vulnerable.
 - A newly respawned player receives a short protection period. It ends early if
   they attack, or when they leave camp; it cannot be used to safely gather in
   contested areas.
@@ -57,7 +63,8 @@ before it adds equipment, crafting, guilds, or permanent territory.
   the player and nearby opponents through the gameplay consequences, not by
   exposing exact inventories globally.
 - At a camp's deposit point, a player holds the gather/interact control to
-  transfer their unsecured pack into a **secured stash**.
+  transfer their unsecured pack into a **secured stash**. Field camps make this
+  a shorter, lower-risk route home; the home camp remains the respawn hub.
 - Secured resources are never dropped on knockout. They are the future input to
   crafting, upgrades, building, or trade; those systems are not part of this
   first combat slice.
@@ -91,8 +98,9 @@ before it adds equipment, crafting, guilds, or permanent territory.
   a visible loot pile at their final position. Secured resources are untouched.
 - The victor—or any nearby player—can collect the pile by standing on it. Loot
   is intentionally contestable; a third party can turn a duel into a theft.
-- The knocked-out player respawns at camp after a short delay with full health
-  and an empty unsecured pack. They keep the remaining unsecured half.
+- The knocked-out player respawns at the **home camp** after a short delay with
+  full health and an empty unsecured pack. They keep the remaining unsecured
+  half.
 - The first implementation must clean up loot deterministically: a pile either
   expires after a defined number of ticks or returns to the world as a resource
   source. We should choose one before implementation.
@@ -156,7 +164,8 @@ movement; combat state always follows the server snapshot.
 
 - Add knockout state, respawn scheduling, loot-pile entities, collection, and
   deterministic expiry.
-- Add a protected camp and respawn protection.
+- Add one central home camp, two deposit-only field camps, and respawn
+  protection. Keep safe radii small and resource nodes outside them.
 - Test that dropped/collected loot is conserved and cannot duplicate.
 
 ### P3 — Extraction
@@ -178,8 +187,8 @@ movement; combat state always follows the server snapshot.
 
 1. **Loss:** is a 50% unsecured-resource drop right, or should the initial test
    use 25% to be more forgiving?
-2. **Camps:** one central safe camp, or several camps that create competing
-   routes and local conflict?
+2. **Camp placement:** which routes and resource areas should the two field
+   camps support without sitting beside the richest nodes?
 3. **Loot expiry:** should abandoned loot disappear after a fixed time, or turn
    back into world resources?
 4. **Persistence:** when the loop works, should secured resources survive a
