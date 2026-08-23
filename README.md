@@ -2,7 +2,8 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
-Product direction and the proposed PvP extraction loop are documented in
+Start with [`docs/project-writeup.md`](docs/project-writeup.md). The underlying
+product direction and proposed PvP extraction loop are in
 [`docs/v0-design.md`](docs/v0-design.md) and
 [`docs/pvp-extraction-plan.md`](docs/pvp-extraction-plan.md).
 
@@ -91,4 +92,4 @@ bun run build
 bun run world:print 12345
 ```
 
-See [`docs/v0-design.md`](docs/v0-design.md) and [`docs/pvp-extraction-plan.md`](docs/pvp-extraction-plan.md).
+See [`docs/project-writeup.md`](docs/project-writeup.md), [`docs/v0-design.md`](docs/v0-design.md), and [`docs/pvp-extraction-plan.md`](docs/pvp-extraction-plan.md).
