@@ -2,6 +2,10 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
+Product direction and the proposed PvP extraction loop are documented in
+[`docs/v0-design.md`](docs/v0-design.md) and
+[`docs/pvp-extraction-plan.md`](docs/pvp-extraction-plan.md).
+
 ## Current slice: M8 — resource node lifecycle
 
 The Bun server owns one generated world, an independent entity for every
@@ -87,4 +91,4 @@ bun run build
 bun run world:print 12345
 ```
 
-See [`docs/v0-design.md`](docs/v0-design.md).
+See [`docs/v0-design.md`](docs/v0-design.md) and [`docs/pvp-extraction-plan.md`](docs/pvp-extraction-plan.md).

@@ -1,14 +1,24 @@
 # Realtime Procedural Multiplayer World — v0 Design Draft
 
 **Status:** Working draft — decisions remain open and will be made collaboratively.
+The PvP extraction direction promoted after this baseline is in
+[`pvp-extraction-plan.md`](pvp-extraction-plan.md).
 
 ## Product direction
 
-Build a browser-based, real-time, tile-based multiplayer world inspired by the broad shape of NeuralMMO:
+Build a browser-based, real-time, tile-based multiplayer world inspired by the broad shape of NeuralMMO.
+
+**Product North Star:** **Build a real-time shared PvP world that feels alive
+because many players inhabit it together and meaningfully affect one another.**
+
+The product succeeds when concurrent human players feel each other's presence
+through competition, cooperation, and shared consequences—not merely when many
+sockets are connected. Persistence and progression should give players reasons
+to return; PvP extraction is the first proposed gameplay loop for doing so.
 
 - Human-controlled players, agent teams, and NPCs inhabit a shared authoritative world.
 - The long-term goal is to reuse the simulation for reinforcement-learning training, so simulation boundaries must remain generic and deterministic.
-- RL training, combat, teams, and persistence are out of the first playable v0 unless explicitly promoted into scope later.
+- RL training, teams, and broader persistence are out of the first playable v0 unless explicitly promoted into scope later. PvP extraction has now been promoted as a proposed follow-on direction; see [`pvp-extraction-plan.md`](pvp-extraction-plan.md).
 - The initial deployment target is one exe.dev VM and a small single-machine server.
 - SQLite is the intended persistence technology when persistence is introduced; it must not become a dependency for the real-time tick loop.
 
@@ -208,7 +218,7 @@ docs/
 
 ## Explicitly deferred from v0
 
-RL and training pipeline, combat, teams/factions, crafting, progression, chat, accounts/OAuth, multi-room matchmaking, distributed services, Redis/Postgres, client prediction/rollback, pathfinding/navmeshes, advanced graphics, dynamic/destructible worlds, and durable inventories.
+RL and training pipeline, teams/factions, crafting, progression, chat, accounts/OAuth, multi-room matchmaking, distributed services, Redis/Postgres, client prediction/rollback, pathfinding/navmeshes, advanced graphics, dynamic/destructible worlds, and durable inventories. PvP combat and extraction are covered separately in [`pvp-extraction-plan.md`](pvp-extraction-plan.md).
 
 ## First design questions to resolve together
 

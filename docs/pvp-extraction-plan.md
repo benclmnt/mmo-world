@@ -10,8 +10,12 @@ contested wilderness, and deciding whether to push farther or make it home.
 Players should come away with rivalries, narrow escapes, ambushes, and reasons
 to return—not just a higher counter.
 
-**Working North Star:** create a living shared world where players make stories,
-relationships, and progress worth returning to.
+**Product North Star:** **Build a real-time shared PvP world that feels alive
+because many players inhabit it together and meaningfully affect one another.**
+
+Extraction is the first gameplay loop that makes that promise tangible: players
+share routes, compete over risk, and carry the consequences of their encounters
+into the next decision.
 
 ## The core loop
 
