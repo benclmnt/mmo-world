@@ -27,11 +27,16 @@ identity/profile state, and simulation-facing state.
 - To distinguish client frame pacing from snapshot/server delays on a device,
   open the client with `?perf=1`. The on-screen panel is local only and reports
   frame/snapshot percentiles plus current server tick metrics.
-- Run a local synthetic load check with:
+- Run the M5 synthetic acceptance check (50 clients plus the 20 resident bots) with:
 
 ```bash
-bun run load --url ws://127.0.0.1:3001/ws --clients 50 --duration 30
+bun run load --url ws://127.0.0.1:3001/ws --clients 50 --duration 300
 ```
+
+The command exits non-zero if clients fail to connect/close cleanly, a socket
+errors or drops before teardown, or fewer than 80% of the expected 10 Hz
+snapshots arrive. Its final JSON record includes server counter deltas for the
+run (overruns, backpressure, skipped/sent snapshots).
 
 ### Run locally
 
