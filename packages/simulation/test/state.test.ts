@@ -14,7 +14,10 @@ describe("simulation snapshots", () => {
 
     expect(snapshot).toEqual({
       tick: 1,
-      entities: [{ id: 2, x: 2, y: 1 }, { id: 9, x: 3, y: 3 }],
+      entities: [
+        { id: 2, x: 2, y: 1, inventory: { wood: 0, stone: 0 } },
+        { id: 9, x: 3, y: 3, inventory: { wood: 0, stone: 0 } },
+      ],
     });
   });
 
@@ -24,8 +27,10 @@ describe("simulation snapshots", () => {
 
     const snapshot = simulation.createSnapshot();
     snapshot.entities[0]!.x = 3;
+    snapshot.entities[0]!.inventory.wood = 99;
 
     expect(simulation.getEntity(2)).toEqual({ id: 2, x: 1, y: 1 });
+    expect(simulation.getInventory(2)).toEqual({ wood: 0, stone: 0 });
   });
 });
 

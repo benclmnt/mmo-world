@@ -1,11 +1,14 @@
 import type { Entity, EntityId } from "./Entity";
-import type { AgentObservation, SimulationSnapshot } from "./state";
-import type { Action, MovementEvent, StepInput, StepResult } from "./actions";
+import type { AgentObservation, SimulationSnapshot, SnapshotEntity } from "./state";
+import type { Action, GatheredEvent, MovementEvent, StepInput, StepResult } from "./actions";
 import { isWalkable } from "./Terrain";
+import { emptyInventory, resourceForTerrain, type Inventory } from "./resources";
 import { SeededRandom } from "./generation/rng";
 import { chooseSpawnPosition, type SpawnOptions } from "./spawn";
 import { World } from "./World";
 import { directionDelta } from "./movement";
+
+const GATHER_COOLDOWN_TICKS = 5;
 
 /**
  * The deterministic world-state owner. Movement actions will be added next;
@@ -14,6 +17,8 @@ import { directionDelta } from "./movement";
 export class Simulation {
   private readonly entityById = new Map<EntityId, Entity>();
   private readonly occupancy = new Map<number, EntityId>();
+  private readonly inventoryById = new Map<EntityId, Inventory>();
+  private readonly nextGatherTickById = new Map<EntityId, number>();
   private readonly rng: SeededRandom;
   private tickNumber = 0;
 
@@ -40,12 +45,20 @@ export class Simulation {
       .sort((left, right) => left.id - right.id);
   }
 
+  getInventory(entityId: EntityId): Inventory | undefined {
+    const inventory = this.inventoryById.get(entityId);
+    return inventory === undefined ? undefined : { ...inventory };
+  }
+
   /**
    * Returns an independent, deterministic view of the dynamic state. Static
    * world terrain is intentionally omitted: it is defined once by `world`.
    */
   createSnapshot(): SimulationSnapshot {
-    return { tick: this.tick, entities: this.getEntities() };
+    return {
+      tick: this.tick,
+      entities: this.getEntities().map((entity) => this.snapshotEntity(entity)),
+    };
   }
 
   /**
@@ -112,6 +125,7 @@ export class Simulation {
 
     const stored = { ...entity };
     this.entityById.set(stored.id, stored);
+    this.inventoryById.set(stored.id, emptyInventory());
     this.occupancy.set(this.positionKey(stored.x, stored.y), stored.id);
   }
 
@@ -123,7 +137,11 @@ export class Simulation {
   step(input: StepInput): StepResult {
     const proposals = this.collectMovementProposals(input.actions);
     const acceptedIds = this.resolveProposals(proposals);
-    const events = this.applyMoves(proposals, acceptedIds);
+    const events: (MovementEvent | GatheredEvent)[] = this.applyMoves(
+      proposals,
+      acceptedIds,
+    );
+    events.push(...this.applyGathers(input.actions));
 
     this.tickNumber++;
     return { tick: this.tickNumber, events };
@@ -136,8 +154,41 @@ export class Simulation {
     }
 
     this.entityById.delete(entityId);
+    this.inventoryById.delete(entityId);
+    this.nextGatherTickById.delete(entityId);
     this.occupancy.delete(this.positionKey(entity.x, entity.y));
     return true;
+  }
+
+  private applyGathers(actions: ReadonlyMap<EntityId, Action>): GatheredEvent[] {
+    const events: GatheredEvent[] = [];
+    for (const entity of this.getEntities()) {
+      const action = actions.get(entity.id);
+      if (action?.type !== "gather") continue;
+      if (this.tickNumber < (this.nextGatherTickById.get(entity.id) ?? 0)) continue;
+      const source = this.gatherSource(entity, action);
+      if (source === undefined) continue;
+      const resource = resourceForTerrain(this.world.get(source.x, source.y));
+      if (resource === undefined) continue;
+
+      this.inventoryById.get(entity.id)![resource]++;
+      this.nextGatherTickById.set(entity.id, this.tickNumber + GATHER_COOLDOWN_TICKS);
+      events.push({ type: "gathered", entityId: entity.id, resource, quantity: 1, ...source });
+    }
+    return events;
+  }
+
+  private gatherSource(entity: Entity, action: Extract<Action, { type: "gather" }>): Position | undefined {
+    if (resourceForTerrain(this.world.get(entity.x, entity.y)) !== undefined) {
+      return { x: entity.x, y: entity.y };
+    }
+    const delta = directionDelta(action.direction);
+    const target = { x: entity.x + delta.x, y: entity.y + delta.y };
+    return this.world.inBounds(target.x, target.y) ? target : undefined;
+  }
+
+  private snapshotEntity(entity: Entity): SnapshotEntity {
+    return { ...entity, inventory: { ...this.inventoryById.get(entity.id)! } };
   }
 
   private collectMovementProposals(actions: ReadonlyMap<EntityId, Action>): Map<EntityId, Position> {
@@ -251,7 +302,7 @@ export class Simulation {
   private applyMoves(
     proposals: ReadonlyMap<EntityId, Position>,
     acceptedIds: ReadonlySet<EntityId>,
-  ): readonly MovementEvent[] {
+  ): MovementEvent[] {
     const events: MovementEvent[] = [];
 
     for (const entityId of acceptedIds) {

@@ -1,3 +1,21 @@
+.inventory { color: #d7c487; }
+
+.mobile-gather {
+  display: none;
+  position: fixed;
+  z-index: 2;
+  right: max(1.5rem, env(safe-area-inset-right));
+  bottom: max(2rem, env(safe-area-inset-bottom));
+  min-width: 5.5rem;
+  min-height: 3.5rem;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 0.8rem;
+  background: rgb(124 92 42 / 78%);
+  color: #fff4d2;
+  font: 600 0.9rem/1 inherit;
+  touch-action: none;
+}
+
 :root {
   color: #e8f1e6;
   background: #12211a;
@@ -134,6 +152,7 @@ p { margin-top: 0.25rem; color: #b2c7b7; font-size: 0.875rem; }
 }
 
 @media (pointer: coarse) and (hover: none) {
+  .mobile-gather { display: block; }
   .overlay {
     width: min(15rem, calc(100vw - 2rem));
     max-width: calc(100vw - 2rem);

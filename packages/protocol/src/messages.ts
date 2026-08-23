@@ -76,7 +76,8 @@ export function isActionMessage(value: unknown): value is ActionMessage {
 
   return (
     value.action.type === "idle" ||
-    (value.action.type === "move" && isDirection(value.action.direction))
+    ((value.action.type === "move" || value.action.type === "gather") &&
+      isDirection(value.action.direction))
   );
 }
 

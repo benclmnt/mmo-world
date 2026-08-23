@@ -86,7 +86,15 @@ Replace local authority with Bun WebSocket server authority.
 
 SQLite persists only durable metadata in `data/realtime-world.sqlite`: the single room's seed, opaque rotating reconnect-token hashes, stable player IDs/display names, and session start/end timestamps. Tokens are delivered only in a player's `world` message and are not included in snapshots or roster profiles. It does **not** persist every tick, movement, snapshot, socket state, or authoritative entity position.
 
+### M7 — Gathering and session inventory
+
+- Hold-to-gather actions target a tree underfoot or a neighboring tree/rock.
+- Server-authoritative, deterministic yields with a simulation-tick cooldown.
+- Inexhaustible resources and per-session wood/stone inventory in snapshots.
+- Depletion, regrowth, crafting, and durable inventory remain deferred.
+
 ## Architectural boundaries
+
 
 ```text
 Three.js client -- JSON/WebSocket --> Game server -- actions/snapshots --> Simulation
@@ -192,7 +200,7 @@ docs/
 
 ## Explicitly deferred from v0
 
-RL and training pipeline, combat, teams/factions, inventories, gathering/crafting, progression, chat, accounts/OAuth, multi-room matchmaking, distributed services, Redis/Postgres, client prediction/rollback, pathfinding/navmeshes, advanced graphics, and dynamic/destructible worlds.
+RL and training pipeline, combat, teams/factions, crafting, progression, chat, accounts/OAuth, multi-room matchmaking, distributed services, Redis/Postgres, client prediction/rollback, pathfinding/navmeshes, advanced graphics, dynamic/destructible worlds, resource depletion/regrowth, and durable inventories.
 
 ## First design questions to resolve together
 

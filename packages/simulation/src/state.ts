@@ -1,11 +1,16 @@
 import type { Entity, EntityId } from "./Entity";
 import type { Terrain } from "./Terrain";
+import type { Inventory } from "./resources";
+
+export interface SnapshotEntity extends Entity {
+  /** Per-session resources; copied so snapshots cannot mutate simulation state. */
+  inventory: Inventory;
+}
 
 /** A serializable, point-in-time view of dynamic world state. */
 export interface SimulationSnapshot {
   tick: number;
-  /** Sorted by numeric entity ID for deterministic serialization. */
-  entities: readonly Entity[];
+  entities: readonly SnapshotEntity[];
 }
 
 /** A fixed 9×9 view of the world centered on an entity. */

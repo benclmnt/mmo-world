@@ -2,7 +2,7 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
-## Current slice: M6 — SQLite metadata persistence
+## Current slice: M7 — gathering and inventory
 
 The Bun server owns one generated world, an independent entity for every
 WebSocket guest, and 20 deterministic server-controlled bots. Bots cycle through
@@ -17,6 +17,13 @@ The server is split deliberately: `server.ts` owns Bun/WebSocket transport and
 the tick scheduler, while `game-room.ts` owns room membership, input sequencing,
 identity/profile state, and simulation-facing state. `persistence.ts` owns the
 SQLite metadata boundary and is never called by the tick loop.
+
+### Gathering
+
+- Hold **E** (or the mobile **Gather** button) while standing on a tree, or while
+  facing an adjacent tree/rock, to gather wood/stone every five server ticks.
+- Resources are currently inexhaustible and inventory is session-local. Gathering
+  is deterministic and server-authoritative; it does not add tick-loop database writes.
 
 ### Persistence
 

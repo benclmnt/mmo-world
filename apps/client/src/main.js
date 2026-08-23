@@ -7,6 +7,8 @@ import { createWorldView } from "./world-view.js";
 const playerStatus = document.querySelector("#player-status");
 const worldSeed = document.querySelector("#world-seed");
 const playerName = document.querySelector("#player-name");
+const inventory = document.querySelector("#inventory");
+const mobileGather = document.querySelector("#mobile-gather");
 const roster = document.querySelector("#player-roster");
 const infoPanel = document.querySelector(".overlay");
 const mobileInfoToggle = document.querySelector("#mobile-info-toggle");
@@ -44,6 +46,12 @@ const movementInput = createMovementInput((action) => {
   latestAction = action;
   sendAction();
 });
+for (const eventName of ["pointerdown", "pointerup", "pointercancel", "pointerleave"]) {
+  mobileGather.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    movementInput.setGathering(eventName === "pointerdown");
+  });
+}
 createMobileTrackpad(
   document.querySelector("#mobile-trackpad"),
   (direction) => movementInput.setTouchDirection(direction),
@@ -109,6 +117,7 @@ function applySnapshot(message) {
 
   const player = message.entities.find((entity) => entity.id === playerId);
   if (player === undefined) return;
+  inventory.textContent = `Wood ${player.inventory?.wood ?? 0} · Stone ${player.inventory?.stone ?? 0}`;
 
   if (!message.entities.some((entity) => entity.id === followedPlayerId))
     followedPlayerId = playerId;

@@ -16,7 +16,8 @@
         <div id="info-panel-details" class="info-panel-details">
         <h1>Realtime World</h1>
         <p>Seed <span id="world-seed"></span> · generated 64×64 terrain</p>
-        <p id="player-status">WASD / arrow keys to move</p>
+        <p id="player-status">WASD / arrow keys to move · hold E to gather</p>
+        <p id="inventory" class="inventory">Wood 0 · Stone 0</p>
         <pre id="performance-stats" class="performance-stats" hidden aria-live="polite"></pre>
         <label class="name-field">Display name <input id="player-name" maxlength="24" placeholder="Guest" autocomplete="nickname" /></label>
         <p class="roster-title">Players · click a name to follow</p>
@@ -30,6 +31,7 @@
       <div class="mobile-trackpad__thumb" aria-hidden="true"></div>
       <span class="sr-only">Drag to move</span>
     </div>
+    <button id="mobile-gather" class="mobile-gather" type="button">Gather</button>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>
