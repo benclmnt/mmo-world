@@ -10,15 +10,26 @@
     <main>
       <canvas id="world" aria-label="3D world viewer"></canvas>
       <section class="overlay" aria-live="polite">
+        <button id="mobile-info-toggle" class="mobile-info-toggle" type="button" aria-expanded="false" aria-controls="info-panel-details">
+          <span>Realtime World</span><span aria-hidden="true">⌄</span>
+        </button>
+        <div id="info-panel-details" class="info-panel-details">
         <h1>Realtime World</h1>
         <p>Seed <span id="world-seed"></span> · generated 64×64 terrain</p>
         <p id="player-status">WASD / arrow keys to move</p>
+        <pre id="performance-stats" class="performance-stats" hidden aria-live="polite"></pre>
         <label class="name-field">Display name <input id="player-name" maxlength="24" placeholder="Guest" autocomplete="nickname" /></label>
         <p class="roster-title">Players · click a name to follow</p>
         <ul id="player-roster" aria-label="Connected players"></ul>
         <p>Right-drag pans · wheel zooms · R resets camera</p>
+        </div>
       </section>
     </main>
+    <div id="mobile-trackpad" class="mobile-trackpad" hidden aria-label="Movement trackpad" role="application">
+      <div class="mobile-trackpad__guide" aria-hidden="true"></div>
+      <div class="mobile-trackpad__thumb" aria-hidden="true"></div>
+      <span class="sr-only">Drag to move</span>
+    </div>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

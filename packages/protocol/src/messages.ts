@@ -27,8 +27,20 @@ export interface WorldMessage {
   tiles: readonly number[];
 }
 
+export interface ActionAcknowledgement {
+  entityId: number;
+  /** Most recent action sequence incorporated into a server simulation tick. */
+  sequence: number;
+  /** Whether that action moved the entity during this simulation tick. */
+  movementAccepted: boolean;
+}
+
 export interface SnapshotMessage extends SimulationSnapshot {
   type: "snapshot";
+  /** Server wall-clock time immediately before this snapshot was serialized. */
+  serverSentAtMs?: number;
+  /** Input sequences applied by this tick, keyed by player entity ID. */
+  actionAcknowledgements?: readonly ActionAcknowledgement[];
   /** Profiles only for entities present in this authoritative snapshot. */
   actors: readonly ActorProfile[];
 }

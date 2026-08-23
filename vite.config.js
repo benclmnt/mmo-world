@@ -7,6 +7,9 @@ export default defineConfig({
     port: 8000,
     allowedHosts: ["mmo.benclmnt.com", "ben-nmmo.exe.xyz"],
     proxy: {
+      "/metrics": {
+        target: "http://localhost:3001",
+      },
       "/ws": {
         target: "ws://localhost:3001",
         ws: true,

@@ -1,8 +1,16 @@
 import * as THREE from "three";
+import { directionDelta } from "../../../packages/simulation/src/movement.ts";
+import { isWalkable } from "../../../packages/simulation/src/Terrain.ts";
 import { addTerrainMeshes } from "./terrain-view.js";
 
 /** Creates the Three.js scene and exposes only the operations main.js needs. */
-export function createWorldView(canvas, world, playerId, initialEntities) {
+export function createWorldView(
+  canvas,
+  world,
+  playerId,
+  initialEntities,
+  { predictionEnabled = true } = {},
+) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x89b9d5);
   scene.fog = new THREE.Fog(0x89b9d5, 45, 115);
@@ -20,12 +28,13 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
   camera.lookAt(cameraTarget);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  // A 64×64 world has dense visual detail. A modest DPR and shadow map cap
-  // avoid spending an excessive amount of GPU time per animation frame on
-  // high-density displays while preserving a sharp tile view.
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  const isCoarsePointer = window.matchMedia("(pointer: coarse) and (hover: none)").matches;
+  // Rendering a shadow map for thousands of terrain instances is costly on a
+  // phone. Keep the desktop treatment, but favor consistent frame pacing on
+  // coarse-pointer devices where movement is controlled in real time.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isCoarsePointer ? 1 : 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !isCoarsePointer;
 
   addLights(scene);
   const terrainGroup = new THREE.Group();
@@ -33,9 +42,14 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
   addTerrainMeshes(world, terrainGroup);
 
   const players = new Map();
+  const interpolationDurationMs = 100;
+  const predictionTickMs = 100;
+  let localAction = { type: "idle" };
+  let localActionSequence = -1;
+  let nextPredictionAt = performance.now();
+  let blockedPrediction;
   let followedEntityId = playerId;
   for (const entity of initialEntities) addPlayer(entity);
-  const clock = new THREE.Clock();
   enableCameraControls(
     canvas,
     camera,
@@ -53,7 +67,7 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
   });
 
   return {
-    applySnapshot(entities) {
+    applySnapshot(entities, acknowledgement = undefined) {
       const activeIds = new Set(entities.map((entity) => entity.id));
       for (const [entityId, player] of players) {
         if (activeIds.has(entityId)) continue;
@@ -63,17 +77,40 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
 
       for (const entity of entities) {
         const player = players.get(entity.id) ?? addPlayer(entity);
-        // All player positions, local and remote, are server-confirmed and
-        // independently eased between authoritative 10 Hz snapshots.
-        player.target.set(entity.x, 0, entity.y);
+        if (entity.id === playerId && predictionEnabled) {
+          reconcileLocalPlayer(player, entity, acknowledgement);
+          continue;
+        }
+        transitionPlayer(player, entity.x, entity.y);
+      }
+    },
+    setLocalAction(action, sequence) {
+      if (!predictionEnabled) return;
+      localAction = action;
+      localActionSequence = sequence;
+      blockedPrediction = undefined;
+      // Do not reset the prediction clock for a direction change. Resetting it
+      // began a second transition from the middle of the first one, which is
+      // what made turns visibly cut and stutter. An idle player still starts
+      // its first optimistic tile immediately.
+      if (action.type === "move" && playerIsStationary()) {
+        nextPredictionAt = performance.now();
+        advanceLocalPrediction(nextPredictionAt);
       }
     },
     setFollowEntity(entityId) {
       followedEntityId = players.has(entityId) ? entityId : playerId;
     },
     renderFrame() {
-      const smoothing = 1 - Math.exp(-12 * clock.getDelta());
-      for (const player of players.values()) player.mesh.position.lerp(player.target, smoothing);
+      const now = performance.now();
+      if (predictionEnabled) advanceLocalPrediction(now);
+      for (const player of players.values()) {
+        const progress = Math.min(
+          1,
+          (now - player.transitionStartedAt) / interpolationDurationMs,
+        );
+        player.mesh.position.lerpVectors(player.from, player.target, progress);
+      }
 
       const followedPlayer = players.get(followedEntityId) ?? players.get(playerId);
       if (followedPlayer === undefined) return;
@@ -88,9 +125,90 @@ export function createWorldView(canvas, world, playerId, initialEntities) {
     },
   };
 
+  function transitionPlayer(player, x, y) {
+    if (player.target.x === x && player.target.z === y) return;
+    player.from.copy(player.mesh.position);
+    player.target.set(x, 0, y);
+    player.transitionStartedAt = performance.now();
+  }
+
+  function advanceLocalPrediction(now) {
+    const player = players.get(playerId);
+    if (player === undefined) return;
+    // A backgrounded tab can miss many client ticks. Resume from the current
+    // clock rather than replaying a large, visually meaningless burst.
+    if (now - nextPredictionAt > 1_000) nextPredictionAt = now;
+
+    while (now >= nextPredictionAt) {
+      nextPredictionAt += predictionTickMs;
+      if (localAction.type !== "move") continue;
+
+      const delta = directionDelta(localAction.direction);
+      const x = player.target.x + delta.x;
+      const y = player.target.z + delta.y;
+      if (
+        blockedPrediction !== undefined &&
+        blockedPrediction.x === x &&
+        blockedPrediction.y === y
+      ) {
+        continue;
+      }
+      // Terrain is deterministic and known to the client. Entity occupancy is
+      // intentionally not predicted; an authoritative snapshot can reject the
+      // move and reconcile the visual position below.
+      if (world.inBounds(x, y) && isWalkable(world.get(x, y)))
+        transitionPlayer(player, x, y);
+    }
+  }
+
+  function reconcileLocalPlayer(player, entity, acknowledgement) {
+    if (
+      acknowledgement === undefined ||
+      acknowledgement.sequence < localActionSequence
+    ) {
+      // This snapshot was produced with an older input. Local movement stays
+      // authoritative until the server has had a chance to process the turn.
+      return;
+    }
+
+    if (localAction.type !== "move") {
+      transitionPlayer(player, entity.x, entity.y);
+      return;
+    }
+
+    if (acknowledgement.movementAccepted) {
+      // A successful server tick is confirmation, not a reason to pull the
+      // player back to an already-past snapshot. Keep advancing locally.
+      const wasBlocked = blockedPrediction !== undefined;
+      blockedPrediction = undefined;
+      if (wasBlocked) transitionPlayer(player, entity.x, entity.y);
+      return;
+    }
+
+    // Static terrain is rejected before it reaches this point. A rejected
+    // walkable step is an occupancy conflict (or another server-only rule), so
+    // this is the one case where authority corrects the local prediction.
+    const delta = directionDelta(localAction.direction);
+    blockedPrediction = { x: entity.x + delta.x, y: entity.y + delta.y };
+    transitionPlayer(player, entity.x, entity.y);
+  }
+
+  function playerIsStationary() {
+    const player = players.get(playerId);
+    return player === undefined || (
+      player.mesh.position.x === player.target.x &&
+      player.mesh.position.z === player.target.z
+    );
+  }
+
   function addPlayer(entity) {
     const mesh = createPlayerMesh(entity, entity.id === playerId);
-    const player = { mesh, target: mesh.position.clone() };
+    const player = {
+      mesh,
+      from: mesh.position.clone(),
+      target: mesh.position.clone(),
+      transitionStartedAt: performance.now(),
+    };
     players.set(entity.id, player);
     scene.add(mesh);
     return player;

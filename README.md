@@ -22,8 +22,11 @@ identity/profile state, and simulation-facing state.
 - Per-connection input uses a 20-message/sec token bucket with a burst of 30.
 - WebSocket payloads are capped at 4 KiB. Slow consumers are paused after Bun
   reports backpressure and disconnected at a 256 KiB queued-output limit.
-- `GET /health` returns liveness; `GET /metrics` returns JSON counters and tick
-  timings.
+- `GET /health` returns liveness; `GET /metrics` returns JSON counters, tick
+  timing, snapshot-construction, and broadcast timing.
+- To distinguish client frame pacing from snapshot/server delays on a device,
+  open the client with `?perf=1`. The on-screen panel is local only and reports
+  frame/snapshot percentiles plus current server tick metrics.
 - Run a local synthetic load check with:
 
 ```bash

@@ -17,14 +17,25 @@ export function createMovementInput(onActionChange) {
   const heldKeys = new Map();
   let pressOrder = 0;
 
+  function setHeldInput(inputId, direction) {
+    const existing = heldKeys.get(inputId);
+    if (direction === undefined) {
+      if (!heldKeys.delete(inputId)) return;
+    } else if (existing?.direction === direction) {
+      return;
+    } else {
+      heldKeys.set(inputId, { direction, order: pressOrder++ });
+    }
+    onActionChange?.(currentAction());
+  }
+
   window.addEventListener("keydown", (event) => {
     const direction = directionForCode[event.code];
     if (direction === undefined) return;
 
     event.preventDefault();
     if (!heldKeys.has(event.code)) {
-      heldKeys.set(event.code, { direction, order: pressOrder++ });
-      onActionChange?.(currentAction());
+      setHeldInput(event.code, direction);
     }
   });
 
@@ -32,8 +43,7 @@ export function createMovementInput(onActionChange) {
     if (directionForCode[event.code] === undefined) return;
 
     event.preventDefault();
-    heldKeys.delete(event.code);
-    onActionChange?.(currentAction());
+    setHeldInput(event.code, undefined);
   });
 
   function currentAction() {
@@ -49,5 +59,10 @@ export function createMovementInput(onActionChange) {
       : { type: "move", direction: latestHeldKey.direction };
   }
 
-  return { currentAction };
+  return {
+    currentAction,
+    setTouchDirection(direction) {
+      setHeldInput("touch-trackpad", direction);
+    },
+  };
 }

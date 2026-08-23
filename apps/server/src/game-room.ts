@@ -31,6 +31,8 @@ export type PlayerSession = {
   displayName: string;
   latestAction: Action;
   latestSequence: number;
+  lastAppliedSequence: number;
+  lastMovementAccepted: boolean;
   readonly inputRateLimiter: InputRateLimiter;
 };
 
@@ -69,6 +71,8 @@ export class GameRoom {
       displayName: `Guest ${entityId}`,
       latestAction: { type: "idle" },
       latestSequence: -1,
+      lastAppliedSequence: -1,
+      lastMovementAccepted: false,
       inputRateLimiter: new InputRateLimiter(
         INPUT_MESSAGES_PER_SECOND,
         INPUT_BURST,
@@ -126,15 +130,26 @@ export class GameRoom {
 
   step(): void {
     const actions = new Map<EntityId, Action>();
-    for (const player of this.players.values())
+    for (const player of this.players.values()) {
       actions.set(player.entityId, player.latestAction);
+      player.lastAppliedSequence = player.latestSequence;
+    }
     for (const bot of this.bots.values()) {
       actions.set(
         bot.entityId,
         bot.controller.nextAction(this.simulation.observeAgent(bot.entityId)),
       );
     }
-    this.simulation.step({ actions });
+    const result = this.simulation.step({ actions });
+    const movedEntityIds = new Set(
+      result.events
+        .filter((event) => event.type === "moved")
+        .map((event) => event.entityId),
+    );
+    for (const player of this.players.values()) {
+      player.lastMovementAccepted =
+        player.latestAction.type === "move" && movedEntityIds.has(player.entityId);
+    }
   }
 
   worldMessage(player: PlayerSession): WorldMessage {
@@ -157,6 +172,13 @@ export class GameRoom {
         ...[...this.players.values()].map((player) => this.profileFor(player)),
         ...[...this.bots.values()].map((bot) => this.profileForBot(bot)),
       ].sort((left, right) => left.entityId - right.entityId),
+      actionAcknowledgements: [...this.players.values()]
+        .map((player) => ({
+          entityId: player.entityId,
+          sequence: player.lastAppliedSequence,
+          movementAccepted: player.lastMovementAccepted,
+        }))
+        .sort((left, right) => left.entityId - right.entityId),
     };
   }
 

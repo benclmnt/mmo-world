@@ -75,12 +75,44 @@ describe("GameRoom player lifecycle", () => {
       action: { type: "idle" },
     });
     expect(first.latestAction).toEqual({ type: "move", direction: "north" });
+    expect(room.snapshotMessage().actionAcknowledgements).toEqual([
+      { entityId: first.entityId, sequence: -1, movementAccepted: false },
+      { entityId: second.entityId, sequence: -1, movementAccepted: false },
+    ]);
+    room.step();
+    expect(room.snapshotMessage().actionAcknowledgements).toEqual([
+      { entityId: first.entityId, sequence: 4, movementAccepted: true },
+      { entityId: second.entityId, sequence: -1, movementAccepted: false },
+    ]);
 
     room.receive(first, { type: "set-display-name", displayName: "Ada" });
     room.receive(second, { type: "set-display-name", displayName: " ada " });
     expect(
       room.snapshotMessage().actors.map((actor) => actor.displayName),
     ).toEqual(["Ada", "ada 2"]);
+  });
+
+  test("reports rejected movement in action acknowledgements", () => {
+    const room = new GameRoom(12345, { botCount: 0 });
+    const player = room.join();
+    room.receive(player, {
+      type: "action",
+      sequence: 1,
+      action: { type: "move", direction: "west" },
+    });
+
+    let acknowledgement;
+    for (let tick = 0; tick < 64; tick++) {
+      room.step();
+      acknowledgement = room.snapshotMessage().actionAcknowledgements![0];
+      if (acknowledgement?.movementAccepted === false) break;
+    }
+
+    expect(acknowledgement).toEqual({
+      entityId: player.entityId,
+      sequence: 1,
+      movementAccepted: false,
+    });
   });
 });
 

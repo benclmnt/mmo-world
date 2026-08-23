@@ -1,11 +1,18 @@
 import { World } from "../../../packages/simulation/src/World.ts";
 import { createMovementInput } from "./input.js";
+import { createMobileTrackpad } from "./mobile-trackpad.js";
+import { createPerformanceMonitor } from "./performance-monitor.js";
 import { createWorldView } from "./world-view.js";
 
 const playerStatus = document.querySelector("#player-status");
 const worldSeed = document.querySelector("#world-seed");
 const playerName = document.querySelector("#player-name");
 const roster = document.querySelector("#player-roster");
+const infoPanel = document.querySelector(".overlay");
+const mobileInfoToggle = document.querySelector("#mobile-info-toggle");
+const performanceMonitor = createPerformanceMonitor(
+  document.querySelector("#performance-stats"),
+);
 let socket;
 let playerId;
 let world;
@@ -19,6 +26,10 @@ let followedPlayerId;
 // between its pointer-down and click events.
 roster.addEventListener("pointerdown", selectFollowTarget);
 roster.addEventListener("click", selectFollowTarget);
+mobileInfoToggle.addEventListener("click", () => {
+  const isExpanded = infoPanel.classList.toggle("is-expanded");
+  mobileInfoToggle.setAttribute("aria-expanded", String(isExpanded));
+});
 
 playerName.value = localStorage.getItem("realtime-world.display-name") ?? "";
 playerName.addEventListener("change", () => {
@@ -29,16 +40,22 @@ playerName.addEventListener("change", () => {
   send({ type: "set-display-name", displayName });
 });
 
-createMovementInput((action) => {
+const movementInput = createMovementInput((action) => {
   latestAction = action;
   sendAction();
 });
+createMobileTrackpad(
+  document.querySelector("#mobile-trackpad"),
+  (direction) => movementInput.setTouchDirection(direction),
+);
 
 connect();
 requestAnimationFrame(render);
 
 function render() {
+  const startedAt = performance.now();
   view?.renderFrame();
+  performanceMonitor.recordFrame(performance.now() - startedAt);
   requestAnimationFrame(render);
 }
 
@@ -84,6 +101,7 @@ function initializeWorld(message) {
 }
 
 function applySnapshot(message) {
+  const startedAt = performance.now();
   if (world === undefined || playerId === undefined) return;
 
   const player = message.entities.find((entity) => entity.id === playerId);
@@ -98,11 +116,15 @@ function applySnapshot(message) {
       world,
       playerId,
       message.entities,
+      { predictionEnabled: new URLSearchParams(location.search).get("prediction") !== "0" },
     );
     sendAction();
   }
 
-  view.applySnapshot(message.entities);
+  const acknowledgement = message.actionAcknowledgements?.find(
+    (candidate) => candidate.entityId === playerId,
+  );
+  view.applySnapshot(message.entities, acknowledgement);
   view.setFollowEntity(followedPlayerId);
   renderRoster(message.actors, message.entities);
   const botCount = message.actors.filter(
@@ -111,6 +133,11 @@ function applySnapshot(message) {
   const playerCount = message.actors.length - botCount;
   setStatus(
     `Tile ${player.x}, ${player.y} · ${playerCount} player${playerCount === 1 ? "" : "s"} · ${botCount} bot${botCount === 1 ? "" : "s"} · server tick ${message.tick}`,
+  );
+  performanceMonitor.recordSnapshot(
+    message.tick,
+    performance.now() - startedAt,
+    message.serverSentAtMs,
   );
 }
 
@@ -152,11 +179,13 @@ function selectFollowTarget(event) {
 }
 
 function sendAction() {
+  const sequence = nextActionSequence++;
   send({
     type: "action",
-    sequence: nextActionSequence++,
+    sequence,
     action: latestAction,
   });
+  view?.setLocalAction(latestAction, sequence);
 }
 
 function send(message) {

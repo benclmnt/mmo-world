@@ -27,7 +27,12 @@ const metrics = {
   tickOverruns: 0,
   lastTickDurationMs: 0,
   maxTickDurationMs: 0,
+  lastTickIntervalMs: TICK_DURATION_MS,
+  maxTickIntervalMs: 0,
+  lastSnapshotBuildDurationMs: 0,
+  lastBroadcastDurationMs: 0,
 };
+let lastTickStartedAt = performance.now();
 
 const server = Bun.serve<PlayerSession>({
   port: PORT,
@@ -70,7 +75,11 @@ const server = Bun.serve<PlayerSession>({
     open(socket) {
       sockets.set(socket.data.entityId, { socket, backpressured: false });
       send(socket.data.entityId, room.worldMessage(socket.data), false);
-      send(socket.data.entityId, room.snapshotMessage(), false);
+      send(
+        socket.data.entityId,
+        { ...room.snapshotMessage(), serverSentAtMs: Date.now() },
+        false,
+      );
       log("connection_open", {
         entityId: socket.data.entityId,
         guestId: socket.data.guestId,
@@ -106,6 +115,12 @@ const server = Bun.serve<PlayerSession>({
 
 setInterval(() => {
   const started = performance.now();
+  metrics.lastTickIntervalMs = started - lastTickStartedAt;
+  metrics.maxTickIntervalMs = Math.max(
+    metrics.maxTickIntervalMs,
+    metrics.lastTickIntervalMs,
+  );
+  lastTickStartedAt = started;
   room.step();
   broadcastSnapshot();
   const durationMs = performance.now() - started;
@@ -128,13 +143,29 @@ log("server_started", {
 });
 
 function broadcastSnapshot(): void {
-  const snapshot = room.snapshotMessage();
-  for (const entityId of sockets.keys()) send(entityId, snapshot, true);
+  const buildStartedAt = performance.now();
+  const payload = JSON.stringify({
+    ...room.snapshotMessage(),
+    serverSentAtMs: Date.now(),
+  });
+  metrics.lastSnapshotBuildDurationMs = performance.now() - buildStartedAt;
+
+  const broadcastStartedAt = performance.now();
+  for (const entityId of sockets.keys()) sendSerialized(entityId, payload, true);
+  metrics.lastBroadcastDurationMs = performance.now() - broadcastStartedAt;
 }
 
 function send(
   entityId: number,
   message: ServerMessage,
+  disposable: boolean,
+): void {
+  sendSerialized(entityId, JSON.stringify(message), disposable);
+}
+
+function sendSerialized(
+  entityId: number,
+  payload: string,
   disposable: boolean,
 ): void {
   const state = sockets.get(entityId);
@@ -145,7 +176,7 @@ function send(
   }
 
   try {
-    const result = state.socket.send(JSON.stringify(message));
+    const result = state.socket.send(payload);
     if (result === -1) {
       state.backpressured = true;
       metrics.backpressureEvents++;
