@@ -11,7 +11,7 @@ import {
   type ResourceNode,
   type ResourceNodeSnapshot,
 } from "./resources";
-import { SeededRandom } from "./generation/rng";
+import { hash32, SeededRandom } from "./generation/rng";
 import { chooseSpawnPosition, type SpawnOptions } from "./spawn";
 import { World } from "./World";
 import { directionDelta } from "./movement";
@@ -29,9 +29,11 @@ export class Simulation {
   private readonly nextGatherTickById = new Map<EntityId, number>();
   private readonly resourceNodeByPosition = new Map<number, ResourceNode>();
   private readonly rng: SeededRandom;
+  private readonly simulationSeed: number;
   private tickNumber = 0;
 
   constructor(readonly world: World, simulationSeed = world.seed) {
+    this.simulationSeed = simulationSeed;
     this.rng = new SeededRandom(simulationSeed);
     this.initializeResourceNodes();
   }
@@ -199,25 +201,53 @@ export class Simulation {
   }
 
   private applyGathers(actions: ReadonlyMap<EntityId, Action>): GatheredEvent[] {
-    const events: GatheredEvent[] = [];
+    const candidatesByNode = new Map<number, GatherCandidate[]>();
     for (const entity of this.getEntities()) {
       const action = actions.get(entity.id);
       if (action?.type !== "gather") continue;
       if (this.tickNumber < (this.nextGatherTickById.get(entity.id) ?? 0)) continue;
       const source = this.gatherSource(entity, action);
       if (source === undefined) continue;
-      const node = this.resourceNodeByPosition.get(this.positionKey(source.x, source.y));
+      const key = this.positionKey(source.x, source.y);
+      const node = this.resourceNodeByPosition.get(key);
       if (node === undefined || node.remaining === 0) continue;
+      const candidates = candidatesByNode.get(key) ?? [];
+      candidates.push({ entity, node, source });
+      candidatesByNode.set(key, candidates);
+    }
 
+    const winners: GatherCandidate[] = [];
+    for (const candidates of [...candidatesByNode.values()].sort((left, right) =>
+      left[0]!.source.y - right[0]!.source.y || left[0]!.source.x - right[0]!.source.x,
+    )) {
+      winners.push(...this.chooseGatherWinners(candidates));
+    }
+
+    const events: GatheredEvent[] = [];
+    for (const candidate of winners.sort((left, right) => left.entity.id - right.entity.id)) {
+      const { entity, node, source } = candidate;
       this.inventoryById.get(entity.id)![node.resource]++;
       node.remaining--;
-      if (node.remaining === 0) {
-        node.regrowsAtTick = this.tickNumber + RESOURCE_REGROWTH_TICKS;
-      }
+      if (node.remaining === 0) node.regrowsAtTick = this.tickNumber + RESOURCE_REGROWTH_TICKS;
       this.nextGatherTickById.set(entity.id, this.tickNumber + GATHER_COOLDOWN_TICKS);
       events.push({ type: "gathered", entityId: entity.id, resource: node.resource, quantity: 1, ...source });
     }
     return events;
+  }
+
+  /** Selects scarce simultaneous gathers fairly without relying on input/Map order. */
+  private chooseGatherWinners(candidates: readonly GatherCandidate[]): readonly GatherCandidate[] {
+    const available = candidates[0]!.node.remaining;
+    if (candidates.length <= available) return candidates;
+
+    const shuffled = [...candidates].sort((left, right) => left.entity.id - right.entity.id);
+    const source = candidates[0]!.source;
+    const random = new SeededRandom(hash32(this.simulationSeed, source.x, source.y, this.tickNumber));
+    for (let index = shuffled.length - 1; index > 0; index--) {
+      const selected = random.nextInt(index + 1);
+      [shuffled[index], shuffled[selected]] = [shuffled[selected]!, shuffled[index]!];
+    }
+    return shuffled.slice(0, available);
   }
 
   private gatherSource(entity: Entity, action: Extract<Action, { type: "gather" }>): Position | undefined {
@@ -387,6 +417,12 @@ export class Simulation {
   private positionKey(x: number, y: number): number {
     return y * this.world.width + x;
   }
+}
+
+interface GatherCandidate {
+  entity: Entity;
+  node: ResourceNode;
+  source: Position;
 }
 
 interface Position {

@@ -44,6 +44,31 @@ describe("gathering", () => {
     expect(simulation.getInventory(1)).toEqual({ wood: 4, stone: 0 });
   });
 
+  test("uses a deterministic lottery for scarce simultaneous gathers", () => {
+    const createContestedSimulation = () => {
+      const world = new World(17, 5, 5);
+      world.set(2, 2, Terrain.Rock);
+      const simulation = new Simulation(world);
+      simulation.placeEntity({ id: 1, x: 1, y: 2 });
+      simulation.placeEntity({ id: 2, x: 2, y: 1 });
+      for (let tick = 0; tick <= 10; tick++) {
+        simulation.step({ actions: new Map([[1, gather("east")]]) });
+      }
+      while (simulation.tick < 15) simulation.step({ actions: new Map() });
+      return simulation;
+    };
+    const first = createContestedSimulation();
+    const second = createContestedSimulation();
+
+    const firstResult = first.step({ actions: new Map([[1, gather("east")], [2, gather("south")]]) });
+    const secondResult = second.step({ actions: new Map([[2, gather("south")], [1, gather("east")]]) });
+
+    expect(firstResult.events).toEqual(secondResult.events);
+    expect(firstResult.events.filter((event) => event.type === "gathered")).toHaveLength(1);
+    expect(firstResult.events[0]).toMatchObject({ entityId: 2 });
+    expect(first.getInventory(1)!.stone + first.getInventory(2)!.stone).toBe(4);
+  });
+
   test("rejects distant, blocked, and out-of-bounds gather attempts deterministically", () => {
     const world = new World(1, 3, 3);
     world.set(2, 1, Terrain.Rock);

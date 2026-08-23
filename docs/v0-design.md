@@ -98,6 +98,7 @@ SQLite persists only durable metadata in `data/realtime-world.sqlite`: the singl
 - Trees yield three wood; rocks yield four stone before depletion.
 - Fully depleted nodes regrow after 100 simulation ticks.
 - Client visuals darken depleted nodes, using sparse authoritative node snapshots.
+- Scarce simultaneous gathers use a deterministic per-tick lottery; clients predict attempts and reconcile state from snapshots.
 
 ## Architectural boundaries
 

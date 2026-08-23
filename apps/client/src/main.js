@@ -228,6 +228,10 @@ function sendAction() {
     action: latestAction,
   });
   view?.setLocalAction(latestAction, sequence);
+  if (latestAction.type === "gather") {
+    // Predict the attempt immediately; inventory/node state stays server-authoritative.
+    gatherStatus.textContent = "Gathering…";
+  }
 }
 
 function send(message) {

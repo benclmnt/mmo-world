@@ -25,6 +25,8 @@ SQLite metadata boundary and is never called by the tick loop.
 - Trees hold 3 wood and rocks hold 4 stone. A depleted node regrows after 100 server ticks.
 - Snapshots transmit only nodes below full capacity; the client restores omitted nodes as full.
 - Depletion state remains in-memory and is not written by the tick loop.
+- When players contest fewer remaining charges, the server uses a deterministic per-tick lottery rather than entity-ID priority.
+- The client immediately predicts a gathering attempt, then corrects inventory/node state from the next authoritative snapshot.
 
 ### Persistence
 
