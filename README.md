@@ -2,9 +2,6 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
-For a concise product overview and a working North Star to refine together, see
-[`docs/project-writeup.md`](docs/project-writeup.md).
-
 ## Current slice: M8 — resource node lifecycle
 
 The Bun server owns one generated world, an independent entity for every
@@ -83,4 +80,4 @@ bun run build
 bun run world:print 12345
 ```
 
-See [`docs/project-writeup.md`](docs/project-writeup.md) and [`docs/v0-design.md`](docs/v0-design.md).
+See [`docs/v0-design.md`](docs/v0-design.md).
