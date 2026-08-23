@@ -30,6 +30,19 @@ describe("GameRoom player lifecycle", () => {
     expect(room.join().entityId).toBe(3);
   });
 
+  test("restores a persistent inventory into a new session entity", () => {
+    const room = new GameRoom(12345, { botCount: 0 });
+    const player = room.join({
+      guestId: "player-uuid",
+      inventory: { wood: 7, stone: 3 },
+    });
+
+    expect(room.inventoryFor(player.entityId)).toEqual({ wood: 7, stone: 3 });
+    expect(room.snapshotMessage().entities).toContainEqual(
+      expect.objectContaining({ id: player.entityId, inventory: { wood: 7, stone: 3 } }),
+    );
+  });
+
   test("rate limits a flood of otherwise valid client input", () => {
     const room = new GameRoom(12345, { botCount: 0 });
     const player = room.join();

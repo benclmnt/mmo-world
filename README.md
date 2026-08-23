@@ -16,7 +16,8 @@ room. The browser renders and interpolates both local and remote players.
 The server is split deliberately: `server.ts` owns Bun/WebSocket transport and
 the tick scheduler, while `game-room.ts` owns room membership, input sequencing,
 identity/profile state, and simulation-facing state. `persistence.ts` owns the
-SQLite metadata boundary and is never called by the tick loop.
+SQLite identity/inventory boundary; completed gathers checkpoint the affected
+player inventory without persisting world simulation state.
 
 ### Gathering
 
@@ -31,9 +32,13 @@ SQLite metadata boundary and is never called by the tick loop.
 ### Persistence
 
 - SQLite defaults to `data/realtime-world.sqlite` (override with `DATABASE_PATH`).
-- It persists the room seed, player display names, hashes of rotating reconnect
-  tokens, and session timestamps—not positions, actions, ticks, or snapshots.
+- It persists the room seed, player display names, per-player wood/stone
+  inventory, hashes of rotating reconnect tokens, and session timestamps—not
+  positions, actions, ticks, or resource-node state.
 - The browser saves its opaque reconnect token locally after its first join.
+  That token is the stable browser identity binding; a separate client-supplied
+  UUID is not trusted. On reconnect/refresh the server restores the inventory
+  for that identity into the new session entity.
 
 ### Operations
 

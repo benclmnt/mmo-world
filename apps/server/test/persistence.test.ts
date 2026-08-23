@@ -17,10 +17,12 @@ describe("PersistenceStore", () => {
     expect(first.reconnectToken).toHaveLength(43);
 
     store.updateDisplayName(first.playerId, "Persistent Pilot");
+    store.updateInventory(first.playerId, { wood: 7, stone: 3 });
     const resumed = store.authenticate(first.reconnectToken);
     expect(resumed).toMatchObject({
       playerId: first.playerId,
       displayName: "Persistent Pilot",
+      inventory: { wood: 7, stone: 3 },
       resumed: true,
     });
     expect(resumed.reconnectToken).not.toBe(first.reconnectToken);

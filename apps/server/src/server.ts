@@ -114,12 +114,13 @@ const server = Bun.serve<PlayerSession>({
       }
     },
     close(socket) {
-      if (
-        !sockets.delete(socket.data.entityId) ||
-        !room.leave(socket.data.entityId)
-      )
-        return;
+      sockets.delete(socket.data.entityId);
+      const inventory = room.inventoryFor(socket.data.entityId);
+      if (inventory !== undefined) {
+        persistence.updateInventory(socket.data.guestId, inventory);
+      }
       persistence.closeSession(socket.data.sessionId);
+      if (!room.leave(socket.data.entityId)) return;
       broadcastSnapshot();
       log("connection_close", {
         entityId: socket.data.entityId,
@@ -137,7 +138,8 @@ setInterval(() => {
     metrics.lastTickIntervalMs,
   );
   lastTickStartedAt = started;
-  room.step();
+  const result = room.step();
+  persistGatheredInventories(result.events);
   broadcastSnapshot();
   const durationMs = performance.now() - started;
   metrics.lastTickDurationMs = durationMs;
@@ -158,6 +160,17 @@ log("server_started", {
   databasePath: DATABASE_PATH,
   ticksPerSecond: TICKS_PER_SECOND,
 });
+
+function persistGatheredInventories(events: readonly { type: string; entityId: number }[]): void {
+  for (const event of events) {
+    if (event.type !== "gathered") continue;
+    const player = sockets.get(event.entityId)?.socket.data;
+    const inventory = room.inventoryFor(event.entityId);
+    if (player !== undefined && inventory !== undefined) {
+      persistence.updateInventory(player.guestId, inventory);
+    }
+  }
+}
 
 function broadcastSnapshot(): void {
   const buildStartedAt = performance.now();

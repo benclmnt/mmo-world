@@ -3,7 +3,8 @@ import { createBot, type BotSession } from "./agents";
 import { InputRateLimiter } from "./input-rate-limiter";
 import { generateWorld } from "../../../packages/simulation/src/generation/generateWorld";
 import { Simulation } from "../../../packages/simulation/src/Simulation";
-import type { Action } from "../../../packages/simulation/src/actions";
+import type { Action, StepResult } from "../../../packages/simulation/src/actions";
+import type { Inventory } from "../../../packages/simulation/src/resources";
 import {
   isActionMessage,
   isSetDisplayNameMessage,
@@ -29,6 +30,7 @@ export interface PlayerIdentity {
   guestId?: string;
   displayName?: string;
   reconnectToken?: string;
+  inventory?: Inventory;
 }
 export type PlayerSession = {
   readonly entityId: EntityId;
@@ -90,6 +92,9 @@ export class GameRoom {
     };
 
     this.simulation.spawnEntity(entityId, { minSeparation: 0 });
+    if (identity.inventory !== undefined) {
+      this.simulation.setInventory(entityId, identity.inventory);
+    }
     this.players.set(entityId, player);
     return player;
   }
@@ -126,6 +131,10 @@ export class GameRoom {
     return "invalid";
   }
 
+  inventoryFor(entityId: EntityId): Inventory | undefined {
+    return this.players.has(entityId) ? this.simulation.getInventory(entityId) : undefined;
+  }
+
   get playerCount(): number {
     return this.players.size;
   }
@@ -138,7 +147,7 @@ export class GameRoom {
     return this.simulation.tick;
   }
 
-  step(): void {
+  step(): StepResult {
     const actions = new Map<EntityId, Action>();
     for (const player of this.players.values()) {
       actions.set(player.entityId, player.latestAction);
@@ -160,6 +169,7 @@ export class GameRoom {
       player.lastMovementAccepted =
         player.latestAction.type === "move" && movedEntityIds.has(player.entityId);
     }
+    return result;
   }
 
   worldMessage(player: PlayerSession): WorldMessage {

@@ -62,6 +62,17 @@ export class Simulation {
     return inventory === undefined ? undefined : { ...inventory };
   }
 
+  setInventory(entityId: EntityId, inventory: Inventory): void {
+    if (!Number.isSafeInteger(inventory.wood) || inventory.wood < 0 ||
+        !Number.isSafeInteger(inventory.stone) || inventory.stone < 0) {
+      throw new Error("Inventory counts must be non-negative safe integers");
+    }
+    if (!this.entityById.has(entityId)) {
+      throw new Error(`Entity '${entityId}' does not exist`);
+    }
+    this.inventoryById.set(entityId, { ...inventory });
+  }
+
   /**
    * Returns an independent, deterministic view of the dynamic state. Static
    * world terrain is intentionally omitted: it is defined once by `world`.
