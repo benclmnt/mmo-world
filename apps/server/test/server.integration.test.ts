@@ -1,4 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const SERVER_TIMEOUT_MS = 5_000;
 const POLL_INTERVAL_MS = 25;
@@ -6,15 +9,20 @@ const POLL_INTERVAL_MS = 25;
 let serverProcess: ReturnType<typeof Bun.spawn> | undefined;
 let port: number | undefined;
 const sockets: WebSocket[] = [];
+const testDatabasePath = join(tmpdir(), `realtime-world-${crypto.randomUUID()}.sqlite`);
 
 afterAll(async () => {
   for (const socket of sockets) socket.close();
-  if (serverProcess === undefined) return;
-  serverProcess.kill("SIGTERM");
-  await Promise.race([
-    serverProcess.exited,
-    sleep(1_000).then(() => serverProcess?.kill("SIGKILL")),
-  ]);
+  if (serverProcess !== undefined) {
+    serverProcess.kill("SIGTERM");
+    await Promise.race([
+      serverProcess.exited,
+      sleep(1_000).then(() => serverProcess?.kill("SIGKILL")),
+    ]);
+  }
+  rmSync(testDatabasePath, { force: true });
+  rmSync(`${testDatabasePath}-shm`, { force: true });
+  rmSync(`${testDatabasePath}-wal`, { force: true });
 });
 
 describe("game server transport boundary", () => {
@@ -45,6 +53,7 @@ describe("game server transport boundary", () => {
       const firstWorld = await first.next((message) => message.type === "world");
       const secondWorld = await second.next((message) => message.type === "world");
       expect(firstWorld.playerId).not.toBe(secondWorld.playerId);
+      expect(firstWorld.reconnectToken).toBeString();
 
       await first.next(
         (message) =>
@@ -58,6 +67,7 @@ describe("game server transport boundary", () => {
       });
 
       const beforeFlood = await fetchJson(`${httpUrl}/metrics`);
+      first.socket.send(JSON.stringify({ type: "set-display-name", displayName: "Persistent Pilot" }));
       first.socket.send("{");
       for (let sequence = 0; sequence < 100; sequence++) {
         first.socket.send(
@@ -70,7 +80,7 @@ describe("game server transport boundary", () => {
           metrics.acceptedMessages - beforeFlood.acceptedMessages +
           metrics.invalidMessages - beforeFlood.invalidMessages +
           metrics.rateLimitedMessages - beforeFlood.rateLimitedMessages;
-        return processed >= 101 ? metrics : undefined;
+        return processed >= 102 ? metrics : undefined;
       });
       expect(afterFlood.invalidMessages).toBeGreaterThan(beforeFlood.invalidMessages);
       expect(afterFlood.acceptedMessages).toBeGreaterThan(beforeFlood.acceptedMessages);
@@ -104,6 +114,18 @@ describe("game server transport boundary", () => {
         const metrics = await fetchJson(`${httpUrl}/metrics`);
         return metrics.players === 0 && metrics.connections === 0;
       });
+      const resumed = await connect(
+        `${wsUrl}?reconnectToken=${encodeURIComponent(firstWorld.reconnectToken)}`,
+      );
+      const resumedWorld = await resumed.next((message) => message.type === "world");
+      expect(resumedWorld.player.guestId).toBe(firstWorld.player.guestId);
+      expect(resumedWorld.player.displayName).toBe("Persistent Pilot");
+      expect(resumedWorld.reconnectToken).not.toBe(firstWorld.reconnectToken);
+      resumed.socket.close();
+      await eventually(async () => {
+        const metrics = await fetchJson(`${httpUrl}/metrics`);
+        return metrics.players === 0 && metrics.connections === 0;
+      });
       expect((await fetchJson(`${httpUrl}/health`)).status).toBe("ok");
     },
     10_000,
@@ -113,7 +135,7 @@ describe("game server transport boundary", () => {
 async function startServer(): Promise<number> {
   serverProcess = Bun.spawn([Bun.which("bun") ?? "bun", "run", "apps/server/src/server.ts"], {
     cwd: import.meta.dir + "/../../..",
-    env: { ...Bun.env, PORT: "0", WORLD_SEED: "12345" },
+    env: { ...Bun.env, PORT: "0", WORLD_SEED: "12345", DATABASE_PATH: testDatabasePath },
     stdout: "pipe",
     stderr: "pipe",
   });

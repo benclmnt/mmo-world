@@ -1,6 +1,7 @@
 import type { ServerWebSocket } from "bun";
-import type { ServerMessage } from "../../../packages/protocol/src/messages";
+import { isSetDisplayNameMessage, type ServerMessage } from "../../../packages/protocol/src/messages";
 import { GameRoom, type PlayerSession } from "./game-room";
+import { PersistenceStore } from "./persistence";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const TICKS_PER_SECOND = 10;
@@ -8,13 +9,16 @@ const TICK_DURATION_MS = 1_000 / TICKS_PER_SECOND;
 const WORLD_SEED = Number(process.env.WORLD_SEED ?? 20260729);
 const MAX_PAYLOAD_BYTES = 4 * 1024;
 const BACKPRESSURE_LIMIT_BYTES = 256 * 1024;
+const DATABASE_PATH = process.env.DATABASE_PATH ?? "data/realtime-world.sqlite";
 
 interface SocketState {
   readonly socket: ServerWebSocket<PlayerSession>;
   backpressured: boolean;
 }
 
-const room = new GameRoom(WORLD_SEED);
+const persistence = new PersistenceStore(DATABASE_PATH);
+const roomSeed = persistence.roomSeed(WORLD_SEED);
+const room = new GameRoom(roomSeed);
 const sockets = new Map<number, SocketState>();
 const startedAtMs = Date.now();
 const metrics = {
@@ -59,12 +63,19 @@ const server = Bun.serve<PlayerSession>({
 
     let player: PlayerSession;
     try {
-      player = room.join();
-    } catch {
-      return new Response("Room is full", { status: 503 });
+      const identity = persistence.authenticate(
+        new URL(request.url).searchParams.get("reconnectToken"),
+      );
+      player = room.join({ ...identity, guestId: identity.playerId });
+      persistence.updateDisplayName(identity.playerId, player.displayName);
+      player.sessionId = persistence.openSession(player.guestId, player.entityId);
+    } catch (error) {
+      log("connection_rejected", { error: String(error) }, "warn");
+      return new Response("Unable to create player session", { status: 503 });
     }
 
     if (server.upgrade(request, { data: player })) return;
+    persistence.closeSession(player.sessionId);
     room.leave(player.entityId);
     return new Response("WebSocket upgrade failed", { status: 400 });
   },
@@ -86,10 +97,14 @@ const server = Bun.serve<PlayerSession>({
       });
     },
     message(socket, rawMessage) {
-      const result = room.receive(socket.data, parseJson(rawMessage));
+      const message = parseJson(rawMessage);
+      const result = room.receive(socket.data, message);
       if (result === "accepted") metrics.acceptedMessages++;
       if (result === "invalid") metrics.invalidMessages++;
       if (result === "rate_limited") metrics.rateLimitedMessages++;
+      if (result === "accepted" && isSetDisplayNameMessage(message)) {
+        persistence.updateDisplayName(socket.data.guestId, socket.data.displayName);
+      }
     },
     drain(socket) {
       const state = sockets.get(socket.data.entityId);
@@ -104,6 +119,7 @@ const server = Bun.serve<PlayerSession>({
         !room.leave(socket.data.entityId)
       )
         return;
+      persistence.closeSession(socket.data.sessionId);
       broadcastSnapshot();
       log("connection_close", {
         entityId: socket.data.entityId,
@@ -138,7 +154,8 @@ setInterval(() => {
 
 log("server_started", {
   port: server.port,
-  seed: WORLD_SEED,
+  seed: roomSeed,
+  databasePath: DATABASE_PATH,
   ticksPerSecond: TICKS_PER_SECOND,
 });
 

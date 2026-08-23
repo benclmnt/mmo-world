@@ -16,11 +16,11 @@ This document records the proposed v0 plan supplied on July 28, 2026. It is a st
 
 ## v0 objective
 
-Create a minimal playable browser-based real-time multiplayer 2D world:
+Create a minimal playable browser-based real-time multiplayer isometric 3D world:
 
 - Server owns authoritative state.
 - Browser clients send movement intentions through WebSockets.
-- Phaser renders the shared procedural tile world.
+- Three.js renders the shared procedural tile world as a lightweight isometric 3D scene.
 - Human players and server-controlled heuristic agents use the same action interface.
 - A 64×64 seeded world contains grass, water, trees, and rocks.
 - Movement is four-directional, collision-aware, simultaneous, deterministic, and visually interpolated.
@@ -47,13 +47,13 @@ Completion checks:
 - Blocked terrain and shared occupancy are impossible.
 - Spawn locations are selected deterministically from unoccupied grass tiles in a sufficiently connected playable region.
 
-### M1 — Local Phaser world
+### M1 — Local Three.js world
 
 Render one locally controlled test player before networking.
 
-- Phaser tilemap rendering with a compact tileset.
-- Coherent terrain regions, deterministic visual variants, basic water transitions, and clustered trees/rocks.
-- Pixel-art nearest-neighbour rendering; camera follows player.
+- Three.js instanced terrain meshes and lightweight entity meshes.
+- Stylized low-poly materials, deterministic visual variants, simple water surfaces, and clustered trees/rocks.
+- Orthographic camera follows player.
 
 ### M2 — One server-connected client
 
@@ -62,7 +62,7 @@ Replace local authority with Bun WebSocket server authority.
 - One room, one simulation, 10 Hz tick loop.
 - Initial terrain definition sent once; entity snapshots sent every tick.
 - Keyboard inputs become actions sent to server.
-- Phaser renders only authoritative positions, with interpolation.
+- Three.js renders only authoritative positions, with interpolation.
 
 ### M3 — Multiplayer
 
@@ -84,12 +84,12 @@ Replace local authority with Bun WebSocket server authority.
 
 ### M6 — Optional SQLite persistence
 
-SQLite can persist durable metadata such as display names, reconnect tokens, room seed, and aggregate sessions. Do **not** persist every tick, movement, snapshot, or socket state.
+SQLite persists only durable metadata in `data/realtime-world.sqlite`: the single room's seed, opaque rotating reconnect-token hashes, stable player IDs/display names, and session start/end timestamps. Tokens are delivered only in a player's `world` message and are not included in snapshots or roster profiles. It does **not** persist every tick, movement, snapshot, socket state, or authoritative entity position.
 
 ## Architectural boundaries
 
 ```text
-Phaser client -- JSON/WebSocket --> Game server -- actions/snapshots --> Simulation
+Three.js client -- JSON/WebSocket --> Game server -- actions/snapshots --> Simulation
 ```
 
 ### Simulation owns
@@ -103,7 +103,7 @@ Phaser client -- JSON/WebSocket --> Game server -- actions/snapshots --> Simulat
 - Sockets, connection lifecycle, guest identities, input validation, rate limits.
 - Latest pending human input, bot-policy invocation, scheduler, broadcasts, metrics/logging/backpressure.
 
-### Phaser client owns
+### Three.js client owns
 
 - Tile/entity rendering, keyboard state, outgoing intentions, interpolation, camera, connection UX.
 - Mapping logical terrain to deterministic visual frame choices.
@@ -196,7 +196,7 @@ RL and training pipeline, combat, teams/factions, inventories, gathering/craftin
 
 ## First design questions to resolve together
 
-1. What should the **very first playable slice** include: M0 only, or M0 plus a minimal local Phaser viewer?
+1. What should the **very first playable slice** include: M0 only, or M0 plus a minimal local Three.js viewer?
 2. Should v0 use a fixed configured seed, a seed configurable at process startup, or generate one and expose it?
 3. What exact abstraction do we want for future agent teams: generic entities plus a `controller` outside simulation, or a first-class team field now?
 4. When should SQLite enter the project: scaffolded from the start but unused by the tick loop, or added after multiplayer works?

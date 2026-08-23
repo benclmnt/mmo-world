@@ -2,7 +2,7 @@
 
 An in-progress deterministic, real-time multiplayer tiled-world experiment.
 
-## Current slice: M5 — hardening and load testing
+## Current slice: M6 — SQLite metadata persistence
 
 The Bun server owns one generated world, an independent entity for every
 WebSocket guest, and 20 deterministic server-controlled bots. Bots cycle through
@@ -15,7 +15,15 @@ room. The browser renders and interpolates both local and remote players.
 
 The server is split deliberately: `server.ts` owns Bun/WebSocket transport and
 the tick scheduler, while `game-room.ts` owns room membership, input sequencing,
-identity/profile state, and simulation-facing state.
+identity/profile state, and simulation-facing state. `persistence.ts` owns the
+SQLite metadata boundary and is never called by the tick loop.
+
+### Persistence
+
+- SQLite defaults to `data/realtime-world.sqlite` (override with `DATABASE_PATH`).
+- It persists the room seed, player display names, hashes of rotating reconnect
+  tokens, and session timestamps—not positions, actions, ticks, or snapshots.
+- The browser saves its opaque reconnect token locally after its first join.
 
 ### Operations
 

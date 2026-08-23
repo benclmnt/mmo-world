@@ -21,6 +21,8 @@ export interface WorldMessage {
   type: "world";
   playerId: number;
   player: PlayerProfile;
+  /** A rotated opaque credential, present only in the connecting player's world message. */
+  reconnectToken?: string;
   seed: number;
   width: number;
   height: number;

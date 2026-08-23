@@ -25,10 +25,18 @@ export interface GameRoomOptions {
   botCount?: number;
 }
 
+export interface PlayerIdentity {
+  guestId?: string;
+  displayName?: string;
+  reconnectToken?: string;
+}
 export type PlayerSession = {
   readonly entityId: EntityId;
+  /** Stable persistent player ID; retained as guestId for protocol compatibility. */
   readonly guestId: string;
   displayName: string;
+  readonly reconnectToken?: string;
+  sessionId?: string;
   latestAction: Action;
   latestSequence: number;
   lastAppliedSequence: number;
@@ -63,12 +71,14 @@ export class GameRoom {
     }
   }
 
-  join(): PlayerSession {
+  join(identity: PlayerIdentity = {}): PlayerSession {
     const entityId = this.nextEntityId++;
+    const requestedName = identity.displayName ?? `Guest ${entityId}`;
     const player: PlayerSession = {
       entityId,
-      guestId: `guest-${entityId}`,
-      displayName: `Guest ${entityId}`,
+      guestId: identity.guestId ?? `guest-${entityId}`,
+      displayName: this.uniqueDisplayName(requestedName, entityId),
+      reconnectToken: identity.reconnectToken,
       latestAction: { type: "idle" },
       latestSequence: -1,
       lastAppliedSequence: -1,
@@ -157,6 +167,7 @@ export class GameRoom {
       type: "world",
       playerId: player.entityId,
       player: this.profileFor(player),
+      reconnectToken: player.reconnectToken,
       seed: this.world.seed,
       width: this.world.width,
       height: this.world.height,

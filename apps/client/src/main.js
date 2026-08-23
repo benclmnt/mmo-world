@@ -91,6 +91,9 @@ function initializeWorld(message) {
     message.height,
     new Uint8Array(message.tiles),
   );
+  if (typeof message.reconnectToken === "string" && message.reconnectToken.length > 0) {
+    localStorage.setItem("realtime-world.reconnect-token", message.reconnectToken);
+  }
   playerId = message.playerId;
   followedPlayerId = playerId;
   nextActionSequence = 0;
@@ -195,7 +198,10 @@ function send(message) {
 
 function webSocketUrl() {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws`;
+  const url = new URL(`${protocol}//${window.location.host}/ws`);
+  const reconnectToken = localStorage.getItem("realtime-world.reconnect-token");
+  if (reconnectToken !== null) url.searchParams.set("reconnectToken", reconnectToken);
+  return url.toString();
 }
 
 function parseMessage(rawMessage) {
