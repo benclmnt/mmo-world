@@ -14,6 +14,7 @@ describe("simulation snapshots", () => {
 
     expect(snapshot).toEqual({
       tick: 1,
+      resourceNodes: [],
       entities: [
         { id: 2, x: 2, y: 1, inventory: { wood: 0, stone: 0 } },
         { id: 9, x: 3, y: 3, inventory: { wood: 0, stone: 0 } },

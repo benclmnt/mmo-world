@@ -90,8 +90,14 @@ SQLite persists only durable metadata in `data/realtime-world.sqlite`: the singl
 
 - Hold-to-gather actions target a tree underfoot or a neighboring tree/rock.
 - Server-authoritative, deterministic yields with a simulation-tick cooldown.
-- Inexhaustible resources and per-session wood/stone inventory in snapshots.
-- Depletion, regrowth, crafting, and durable inventory remain deferred.
+- Per-session wood/stone inventory is included in snapshots.
+- Crafting and durable inventory remain deferred.
+
+### M8 — Resource-node lifecycle
+
+- Trees yield three wood; rocks yield four stone before depletion.
+- Fully depleted nodes regrow after 100 simulation ticks.
+- Client visuals darken depleted nodes, using sparse authoritative node snapshots.
 
 ## Architectural boundaries
 
@@ -102,8 +108,8 @@ Three.js client -- JSON/WebSocket --> Game server -- actions/snapshots --> Simul
 
 ### Simulation owns
 
-- World seed, tile grid, logical terrain, occupancy, entities, spawn selection.
-- Movement validation and simultaneous resolution.
+- World seed, tile grid, terrain-backed resource nodes, occupancy, entities, spawn selection.
+- Movement and gathering validation, simultaneous resolution.
 - Tick number, deterministic snapshots, RNG, and agent observation API.
 
 ### Game server owns
@@ -125,7 +131,8 @@ export type Direction = "north" | "south" | "east" | "west";
 
 export type Action =
   | { type: "idle" }
-  | { type: "move"; direction: Direction };
+  | { type: "move"; direction: Direction }
+  | { type: "gather"; direction: Direction };
 
 export interface StepInput {
   actions: ReadonlyMap<EntityId, Action>;
@@ -200,7 +207,7 @@ docs/
 
 ## Explicitly deferred from v0
 
-RL and training pipeline, combat, teams/factions, crafting, progression, chat, accounts/OAuth, multi-room matchmaking, distributed services, Redis/Postgres, client prediction/rollback, pathfinding/navmeshes, advanced graphics, dynamic/destructible worlds, resource depletion/regrowth, and durable inventories.
+RL and training pipeline, combat, teams/factions, crafting, progression, chat, accounts/OAuth, multi-room matchmaking, distributed services, Redis/Postgres, client prediction/rollback, pathfinding/navmeshes, advanced graphics, dynamic/destructible worlds, and durable inventories.
 
 ## First design questions to resolve together
 

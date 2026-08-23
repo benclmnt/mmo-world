@@ -2,7 +2,15 @@ import type { Entity, EntityId } from "./Entity";
 import type { AgentObservation, SimulationSnapshot, SnapshotEntity } from "./state";
 import type { Action, GatheredEvent, MovementEvent, StepInput, StepResult } from "./actions";
 import { isWalkable } from "./Terrain";
-import { emptyInventory, resourceForTerrain, type Inventory } from "./resources";
+import {
+  createResourceNode,
+  emptyInventory,
+  resourceForTerrain,
+  RESOURCE_REGROWTH_TICKS,
+  type Inventory,
+  type ResourceNode,
+  type ResourceNodeSnapshot,
+} from "./resources";
 import { SeededRandom } from "./generation/rng";
 import { chooseSpawnPosition, type SpawnOptions } from "./spawn";
 import { World } from "./World";
@@ -19,11 +27,13 @@ export class Simulation {
   private readonly occupancy = new Map<number, EntityId>();
   private readonly inventoryById = new Map<EntityId, Inventory>();
   private readonly nextGatherTickById = new Map<EntityId, number>();
+  private readonly resourceNodeByPosition = new Map<number, ResourceNode>();
   private readonly rng: SeededRandom;
   private tickNumber = 0;
 
   constructor(readonly world: World, simulationSeed = world.seed) {
     this.rng = new SeededRandom(simulationSeed);
+    this.initializeResourceNodes();
   }
 
   get tick(): number {
@@ -58,6 +68,7 @@ export class Simulation {
     return {
       tick: this.tick,
       entities: this.getEntities().map((entity) => this.snapshotEntity(entity)),
+      resourceNodes: this.getResourceNodeSnapshots(),
     };
   }
 
@@ -135,6 +146,7 @@ export class Simulation {
    * the state at the start of this tick and never depends on Map insertion order.
    */
   step(input: StepInput): StepResult {
+    this.regrowDepletedResourceNodes();
     const proposals = this.collectMovementProposals(input.actions);
     const acceptedIds = this.resolveProposals(proposals);
     const events: (MovementEvent | GatheredEvent)[] = this.applyMoves(
@@ -160,6 +172,32 @@ export class Simulation {
     return true;
   }
 
+  private initializeResourceNodes(): void {
+    for (let y = 0; y < this.world.height; y++) {
+      for (let x = 0; x < this.world.width; x++) {
+        const resource = resourceForTerrain(this.world.get(x, y));
+        if (resource !== undefined) {
+          this.resourceNodeByPosition.set(this.positionKey(x, y), createResourceNode(x, y, resource));
+        }
+      }
+    }
+  }
+
+  private regrowDepletedResourceNodes(): void {
+    for (const node of this.resourceNodeByPosition.values()) {
+      if (node.regrowsAtTick === undefined || node.regrowsAtTick > this.tickNumber) continue;
+      node.remaining = node.capacity;
+      node.regrowsAtTick = undefined;
+    }
+  }
+
+  private getResourceNodeSnapshots(): readonly ResourceNodeSnapshot[] {
+    return [...this.resourceNodeByPosition.values()]
+      .filter((node) => node.remaining < node.capacity)
+      .sort((left, right) => left.y - right.y || left.x - right.x)
+      .map((node) => ({ ...node }));
+  }
+
   private applyGathers(actions: ReadonlyMap<EntityId, Action>): GatheredEvent[] {
     const events: GatheredEvent[] = [];
     for (const entity of this.getEntities()) {
@@ -168,12 +206,16 @@ export class Simulation {
       if (this.tickNumber < (this.nextGatherTickById.get(entity.id) ?? 0)) continue;
       const source = this.gatherSource(entity, action);
       if (source === undefined) continue;
-      const resource = resourceForTerrain(this.world.get(source.x, source.y));
-      if (resource === undefined) continue;
+      const node = this.resourceNodeByPosition.get(this.positionKey(source.x, source.y));
+      if (node === undefined || node.remaining === 0) continue;
 
-      this.inventoryById.get(entity.id)![resource]++;
+      this.inventoryById.get(entity.id)![node.resource]++;
+      node.remaining--;
+      if (node.remaining === 0) {
+        node.regrowsAtTick = this.tickNumber + RESOURCE_REGROWTH_TICKS;
+      }
       this.nextGatherTickById.set(entity.id, this.tickNumber + GATHER_COOLDOWN_TICKS);
-      events.push({ type: "gathered", entityId: entity.id, resource, quantity: 1, ...source });
+      events.push({ type: "gathered", entityId: entity.id, resource: node.resource, quantity: 1, ...source });
     }
     return events;
   }

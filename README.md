@@ -5,7 +5,7 @@ An in-progress deterministic, real-time multiplayer tiled-world experiment.
 For a concise product overview and a working North Star to refine together, see
 [`docs/project-writeup.md`](docs/project-writeup.md).
 
-## Current slice: M7 — gathering and inventory
+## Current slice: M8 — resource node lifecycle
 
 The Bun server owns one generated world, an independent entity for every
 WebSocket guest, and 20 deterministic server-controlled bots. Bots cycle through
@@ -25,8 +25,9 @@ SQLite metadata boundary and is never called by the tick loop.
 
 - Hold **E** (or the mobile **Gather** button) while standing on a tree, or while
   facing an adjacent tree/rock, to gather wood/stone every five server ticks.
-- Resources are currently inexhaustible and inventory is session-local. Gathering
-  is deterministic and server-authoritative; it does not add tick-loop database writes.
+- Trees hold 3 wood and rocks hold 4 stone. A depleted node regrows after 100 server ticks.
+- Snapshots transmit only nodes below full capacity; the client restores omitted nodes as full.
+- Depletion state remains in-memory and is not written by the tick loop.
 
 ### Persistence
 

@@ -1,6 +1,6 @@
 import type { Entity, EntityId } from "./Entity";
 import type { Terrain } from "./Terrain";
-import type { Inventory } from "./resources";
+import type { Inventory, ResourceNodeSnapshot } from "./resources";
 
 export interface SnapshotEntity extends Entity {
   /** Per-session resources; copied so snapshots cannot mutate simulation state. */
@@ -11,6 +11,8 @@ export interface SnapshotEntity extends Entity {
 export interface SimulationSnapshot {
   tick: number;
   entities: readonly SnapshotEntity[];
+  /** Only resource nodes below their normal capacity; all omitted nodes are full. */
+  resourceNodes: readonly ResourceNodeSnapshot[];
 }
 
 /** A fixed 9×9 view of the world centered on an entity. */

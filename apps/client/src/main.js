@@ -1,3 +1,5 @@
+import { Terrain } from "../../../packages/simulation/src/Terrain.ts";
+import { directionDelta } from "../../../packages/simulation/src/movement.ts";
 import { World } from "../../../packages/simulation/src/World.ts";
 import { createMovementInput } from "./input.js";
 import { createMobileTrackpad } from "./mobile-trackpad.js";
@@ -8,6 +10,7 @@ const playerStatus = document.querySelector("#player-status");
 const worldSeed = document.querySelector("#world-seed");
 const playerName = document.querySelector("#player-name");
 const inventory = document.querySelector("#inventory");
+const gatherStatus = document.querySelector("#gather-status");
 const mobileGather = document.querySelector("#mobile-gather");
 const roster = document.querySelector("#player-roster");
 const infoPanel = document.querySelector(".overlay");
@@ -118,6 +121,7 @@ function applySnapshot(message) {
   const player = message.entities.find((entity) => entity.id === playerId);
   if (player === undefined) return;
   inventory.textContent = `Wood ${player.inventory?.wood ?? 0} · Stone ${player.inventory?.stone ?? 0}`;
+  updateGatherStatus(player, message.resourceNodes ?? [], message.tick);
 
   if (!message.entities.some((entity) => entity.id === followedPlayerId))
     followedPlayerId = playerId;
@@ -136,7 +140,7 @@ function applySnapshot(message) {
   const acknowledgement = message.actionAcknowledgements?.find(
     (candidate) => candidate.entityId === playerId,
   );
-  view.applySnapshot(message.entities, acknowledgement);
+  view.applySnapshot(message.entities, message.resourceNodes ?? [], acknowledgement);
   view.setFollowEntity(followedPlayerId);
   renderRoster(message.actors, message.entities);
   const botCount = message.actors.filter(
@@ -151,6 +155,32 @@ function applySnapshot(message) {
     performance.now() - startedAt,
     message.serverSentAtMs,
   );
+}
+
+function updateGatherStatus(player, resourceNodes, tick) {
+  if (latestAction.type !== "gather") {
+    gatherStatus.textContent = "Hold E / Gather near a tree or rock";
+    return;
+  }
+  let x = player.x;
+  let y = player.y;
+  if (world.get(x, y) !== Terrain.Tree) {
+    const delta = directionDelta(latestAction.direction);
+    x += delta.x;
+    y += delta.y;
+  }
+  if (!world.inBounds(x, y) || ![Terrain.Tree, Terrain.Rock].includes(world.get(x, y))) {
+    gatherStatus.textContent = "No resource node in range";
+    return;
+  }
+  const node = resourceNodes.find((candidate) => candidate.x === x && candidate.y === y);
+  if (node === undefined) {
+    gatherStatus.textContent = "Resource node full";
+  } else if (node.remaining === 0) {
+    gatherStatus.textContent = `${node.resource} depleted · regrows in ${Math.max(0, node.regrowsAtTick - tick)} ticks`;
+  } else {
+    gatherStatus.textContent = `${node.resource} node: ${node.remaining}/${node.capacity}`;
+  }
 }
 
 function renderRoster(actors, entities) {

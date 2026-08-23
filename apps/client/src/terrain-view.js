@@ -22,15 +22,32 @@ export function addTerrainMeshes(world, group) {
   addFlatTileInstances(group, grass, 0x5a9b50, 0.16, world.seed, 1);
   addFlatTileInstances(group, water, 0x3a86b9, 0.08, world.seed, 2);
   addFlatTileInstances(group, rock, 0x66706a, 0.16, world.seed, 3);
-  addRockInstances(group, rock, world.seed);
+  const rockResources = addRockInstances(group, rock, world.seed);
   addFlatTileInstances(group, trees, 0x4a8747, 0.16, world.seed, 4);
-  addTreeInstances(group, trees, world.seed);
+  const treeResources = addTreeInstances(group, trees, world.seed);
+  const changedNodes = new Map();
+
+  return {
+    /** Resource snapshots omit full nodes, so first restore the prior sparse set. */
+    applyResourceNodes(nodes) {
+      for (const node of changedNodes.values()) {
+        resourceViewFor(node.resource).setAvailability(node.x, node.y, 1);
+      }
+      changedNodes.clear();
+      for (const node of nodes) {
+        const availability = node.remaining / node.capacity;
+        if (availability === 1) continue;
+        resourceViewFor(node.resource).setAvailability(node.x, node.y, availability);
+        changedNodes.set(`${node.x},${node.y}`, node);
+      }
+    },
+  };
+
+  function resourceViewFor(resource) {
+    return resource === "wood" ? treeResources : rockResources;
+  }
 }
 
-/**
- * InstancedMesh draws many copies of one geometry/material in one draw call.
- * It is a good fit for a world made from thousands of repeated tiles.
- */
 function addFlatTileInstances(group, positions, color, surfaceHeight, seed, salt) {
   const mesh = new THREE.InstancedMesh(
     new THREE.PlaneGeometry(1, 1),
@@ -75,13 +92,23 @@ function addRockInstances(group, positions, seed) {
     mesh.setMatrixAt(index, matrix);
     setVariedColor(mesh, index, 0x788078, variation, instanceColor);
   });
-
   mesh.instanceColor.needsUpdate = true;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   group.add(mesh);
-}
 
+  const indexByPosition = new Map(positions.map(([x, y], index) => [`${x},${y}`, index]));
+  return {
+    setAvailability(x, y, availability) {
+      const index = indexByPosition.get(`${x},${y}`);
+      if (index === undefined) return;
+      const variation = hashToUnit(seed, x, y, 5);
+      const full = new THREE.Color(0x788078).multiplyScalar(0.88 + variation * 0.22);
+      mesh.setColorAt(index, full.lerp(new THREE.Color(0x4c514d), 1 - availability));
+      mesh.instanceColor.needsUpdate = true;
+    },
+  };
+}
 
 function addTreeInstances(group, positions, seed) {
   const trunk = new THREE.InstancedMesh(
@@ -106,24 +133,35 @@ function addTreeInstances(group, positions, seed) {
     const variation = hashToUnit(seed, x, y, 6);
     const size = 0.8 + variation * 0.35;
     rotation.setFromAxisAngle(axisY, variation * Math.PI * 2);
-
     position.set(x, 0.16 + 0.4 * size, y);
     scale.set(size, size, size);
     matrix.compose(position, rotation, scale);
     trunk.setMatrixAt(index, matrix);
     setVariedColor(trunk, index, 0x6e4b2f, variation, trunkColor);
-
-    position.set(x, 0.16 + 0.8 * size + 0.6 * size, y);
+    position.set(x, 0.16 + 1.4 * size, y);
     matrix.compose(position, rotation, scale);
     canopy.setMatrixAt(index, matrix);
     setVariedColor(canopy, index, 0x24613b, variation, canopyColor);
   });
-
   trunk.instanceColor.needsUpdate = true;
   canopy.instanceColor.needsUpdate = true;
   trunk.castShadow = true;
   canopy.castShadow = true;
   group.add(trunk, canopy);
+
+  const indexByPosition = new Map(positions.map(([x, y], index) => [`${x},${y}`, index]));
+  return {
+    setAvailability(x, y, availability) {
+      const index = indexByPosition.get(`${x},${y}`);
+      if (index === undefined) return;
+      const variation = hashToUnit(seed, x, y, 6);
+      const multiplier = 0.88 + variation * 0.22;
+      trunk.setColorAt(index, new THREE.Color(0x6e4b2f).multiplyScalar(multiplier).lerp(new THREE.Color(0x4b3928), 1 - availability));
+      canopy.setColorAt(index, new THREE.Color(0x24613b).multiplyScalar(multiplier).lerp(new THREE.Color(0x6a5940), 1 - availability));
+      trunk.instanceColor.needsUpdate = true;
+      canopy.instanceColor.needsUpdate = true;
+    },
+  };
 }
 
 function setVariedColor(mesh, index, baseColor, variation, target) {

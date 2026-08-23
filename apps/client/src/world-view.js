@@ -39,7 +39,7 @@ export function createWorldView(
   addLights(scene);
   const terrainGroup = new THREE.Group();
   scene.add(terrainGroup);
-  addTerrainMeshes(world, terrainGroup);
+  const terrainResources = addTerrainMeshes(world, terrainGroup);
 
   const players = new Map();
   const interpolationDurationMs = 100;
@@ -67,7 +67,8 @@ export function createWorldView(
   });
 
   return {
-    applySnapshot(entities, acknowledgement = undefined) {
+    applySnapshot(entities, resourceNodes = [], acknowledgement = undefined) {
+      terrainResources.applyResourceNodes(resourceNodes);
       const activeIds = new Set(entities.map((entity) => entity.id));
       for (const [entityId, player] of players) {
         if (activeIds.has(entityId)) continue;

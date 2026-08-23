@@ -8,7 +8,7 @@ function gather(direction: "north" | "south" | "east" | "west") {
 }
 
 describe("gathering", () => {
-  test("gathers inexhaustible tree and rock resources with a tick cooldown", () => {
+  test("gathers tree and rock resources with a tick cooldown", () => {
     const world = new World(1, 5, 5);
     world.set(2, 2, Terrain.Tree);
     world.set(3, 1, Terrain.Rock);
@@ -24,6 +24,24 @@ describe("gathering", () => {
     expect(simulation.getInventory(1)).toEqual({ wood: 1, stone: 0 });
     simulation.step({ actions: new Map([[1, gather("north")]]) });
     expect(simulation.getInventory(1)).toEqual({ wood: 2, stone: 0 });
+  });
+
+  test("depletes nodes, sends sparse state, and regrows them on an exact tick", () => {
+    const world = new World(1, 3, 3);
+    world.set(1, 1, Terrain.Tree);
+    const simulation = new Simulation(world);
+    simulation.placeEntity({ id: 1, x: 1, y: 1 });
+
+    for (let tick = 0; tick <= 10; tick++) simulation.step({ actions: new Map([[1, gather("north")]]) });
+    expect(simulation.getInventory(1)).toEqual({ wood: 3, stone: 0 });
+    expect(simulation.createSnapshot().resourceNodes).toEqual([
+      { x: 1, y: 1, resource: "wood", remaining: 0, capacity: 3, regrowsAtTick: 110 },
+    ]);
+
+    while (simulation.tick <= 110) simulation.step({ actions: new Map() });
+    expect(simulation.createSnapshot().resourceNodes).toEqual([]);
+    simulation.step({ actions: new Map([[1, gather("north")]]) });
+    expect(simulation.getInventory(1)).toEqual({ wood: 4, stone: 0 });
   });
 
   test("rejects distant, blocked, and out-of-bounds gather attempts deterministically", () => {
