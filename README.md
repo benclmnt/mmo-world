@@ -1,95 +1,187 @@
-# Realtime World
+# Realtime World — PvP Extraction MMO
 
-An in-progress deterministic, real-time multiplayer tiled-world experiment.
+## The project
 
-Start with [`docs/project-writeup.md`](docs/project-writeup.md). The underlying
-product direction and proposed PvP extraction loop are in
-[`docs/v0-design.md`](docs/v0-design.md) and
-[`docs/pvp-extraction-plan.md`](docs/pvp-extraction-plan.md).
+Realtime World is a real-time PvP MMO for web browsers.
 
-## Current slice: M8 — resource node lifecycle
+Many players share one wilderness at the same time.
+Players leave a safe camp, gather resources, and meet other players.
+Each player can fight, run away, or work with others.
 
-The Bun server owns one generated world, an independent entity for every
-WebSocket guest, and 20 deterministic server-controlled bots. Bots cycle through
-random-walker, persistent-wanderer, and obstacle-aware-wanderer policies; every
-policy emits the same move/idle actions used by people. It advances the simulation at 10 Hz, resolves all player
-movement simultaneously, and broadcasts authoritative snapshots to every
-connected browser. Guests receive a monotonic entity ID, an editable display
-name, and a roster that includes bots; leaving immediately removes their entity from the shared
-room. The browser renders and interpolates both local and remote players.
+This is not a set of separate matches.
+The goal is one active world with competition, teamwork, escape, and rivalries.
 
-The server is split deliberately: `server.ts` owns Bun/WebSocket transport and
-the tick scheduler, while `game-room.ts` owns room membership, input sequencing,
-identity/profile state, and simulation-facing state. `persistence.ts` owns the
-SQLite identity/inventory boundary; completed gathers checkpoint the affected
-player inventory without persisting world simulation state.
+## Product goal
 
-### Gathering
+Build a shared PvP world where players have real effects on other players.
 
-- Hold **E** (or the mobile **Gather** button) while standing on a tree, or while
-  facing an adjacent tree/rock, to gather wood/stone every five server ticks.
-- Trees hold 3 wood and rocks hold 4 stone. A depleted node regrows after 100 server ticks.
-- Snapshots transmit only nodes below full capacity; the client restores omitted nodes as full.
-- Depletion state remains in-memory and is not written by the tick loop.
-- When players contest fewer remaining charges, the server uses a deterministic per-tick lottery rather than entity-ID priority.
-- The client immediately predicts a gathering attempt, then corrects inventory/node state from the next authoritative snapshot.
+The project succeeds when players notice each other through shared risks and results.
+A high number of connected clients is not enough.
 
-### Persistence
+Long-term progress gives players a reason to return.
+The first gameplay loop is PvP extraction.
 
-- SQLite defaults to `data/realtime-world.sqlite` (override with `DATABASE_PATH`).
-- It persists the room seed, player display names, per-player wood/stone
-  inventory, hashes of rotating reconnect tokens, and session timestamps—not
-  positions, actions, ticks, or resource-node state.
-- The browser saves its opaque reconnect token locally after its first join.
-  That token is the stable browser identity binding; a separate client-supplied
-  UUID is not trusted. On reconnect/refresh the server restores the inventory
-  for that identity into the new session entity.
+## Player loop
 
-### Operations
-
-- Per-connection input uses a 20-message/sec token bucket with a burst of 30.
-- WebSocket payloads are capped at 4 KiB. Slow consumers are paused after Bun
-  reports backpressure and disconnected at a 256 KiB queued-output limit.
-- `GET /health` returns liveness; `GET /metrics` returns JSON counters, tick
-  timing, snapshot-construction, and broadcast timing.
-- To distinguish client frame pacing from snapshot/server delays on a device,
-  open the client with `?perf=1`. The on-screen panel is local only and reports
-  frame/snapshot percentiles plus current server tick metrics.
-- Run the M5 synthetic acceptance check (50 clients plus the 20 resident bots) with:
-
-```bash
-bun run load --url ws://127.0.0.1:3001/ws --clients 50 --duration 300
+```text
+home camp → choose a route → gather in the wilderness → meet players
+    ↑                                                        │
+    └──── respawn / bank loot ← win, escape, or get knocked out ┘
 ```
 
-The command exits non-zero if clients fail to connect/close cleanly, a socket
-errors or drops before teardown, or fewer than 80% of the expected 10 Hz
-snapshots arrive. Its final JSON record includes server counter deltas for the
-run (overruns, backpressure, skipped/sent snapshots).
+1. Start at the protected home camp.
+2. Go into the wilderness to gather wood and stone.
+3. Carry these resources as unsecured loot.
+4. Choose to continue, fight, escape, or extract at a camp.
+5. Deposit resources to make them secured.
+6. Return with progress, a close escape, an ally, or a rival.
 
-### Run locally
+## Secured and unsecured resources
 
-In one terminal, start the game server (port 3001 by default):
+Unsecured resources are resources carried in the wilderness.
+A knockout drops some unsecured resources as loot.
 
-```bash
-bun run server
+Secured resources are resources deposited at a camp.
+A knockout does not remove secured resources.
+
+```text
+Gather 10 wood → carry 10 unsecured wood → get knocked out → lose some wood
+Gather 10 wood → deposit at camp → own 10 secured wood → lose no wood
 ```
 
-In another, start the Vite client (port 8000):
+Secured resources can later support crafting, upgrades, trade, and building.
 
-```bash
-bun run dev
+## Camps and map
+
+The first 64 × 64 world will have these camps:
+
+- One central home camp. It is the only respawn point and has the full secured stash.
+- Two field camps. They accept deposits, but do not provide respawns or full services.
+
+Each camp has a small, visible safe area.
+PvP starts outside the safe area.
+High-value resource nodes are outside the safe areas.
+
+Field camps give players more route choices.
+They must not make most of the map safe.
+
+## First combat rules
+
+Combat must be clear, server-controlled, and important.
+The first version does not need gear, classes, or special abilities.
+
+- Attack one adjacent tile: north, south, east, or west.
+- The game does not choose a target automatically.
+- Each player has 100 health.
+- A valid hit deals 20 damage.
+- A player can attack once every six server ticks.
+- The server runs at 10 ticks each second.
+- An attack uses the player action for that tick.
+- A player cannot move and attack in the same tick.
+- Movement resolves first for all players.
+- Attacks then use the new positions.
+- Damage applies at the same time for all valid attacks.
+- Two players can knock out each other at the same time.
+- Health regenerates only after time outside combat.
+
+## Knockout and loot
+
+At zero health, a player is knocked out. The player is not permanently killed.
+
+A knocked-out player drops 50% of each unsecured resource type, rounded down.
+The dropped resources form a visible loot pile.
+Other players can collect this loot.
+
+After a short delay, the player respawns at the home camp with full health.
+Secured resources are never lost.
+The loot expiry rule is still open.
+
+New players have short protection after respawn.
+This protection ends when they attack or leave camp.
+It must not allow safe gathering in contested areas.
+
+## Why extraction PvP
+
+```text
+Arena game:     fight → respawn → fight again
+Extraction MMO: gather → risk a haul → fight or escape → bank or lose part of it
 ```
 
-The Vite development server proxies browser WebSocket requests from `/ws` to the
-Bun game server. Open the client at port 8000 and move with WASD or arrow keys.
+Combat supports the world loop.
+It can protect routes, stop an extraction, enable theft, and create stories.
 
-## Checks
+Partial loss makes danger real without resetting a player completely.
 
-```bash
-bun test
-bun run typecheck
-bun run build
-bun run world:print 12345
+The project should create stories like these:
+
+- “I took one more node and got caught while I returned.”
+- “We protected each other, then split the resources.”
+- “I lost my stone, followed them, and took it back.”
+- “The north forest has good resources, but it is dangerous.”
+
+## Architecture
+
+```text
+                        ┌──────────────────────┐
+                        │ Browser client       │
+                        │ controls, prediction │
+                        │ Three.js rendering   │
+                        └──────────┬───────────┘
+                                   │ WebSocket actions
+                                   ▼
+                        ┌──────────────────────┐
+                        │ Game server          │
+                        │ connections, inputs, │
+                        │ scheduling, metrics  │
+                        └──────────┬───────────┘
+                                   │ actions / snapshots
+                                   ▼
+                        ┌──────────────────────┐
+                        │ Simulation engine    │
+                        │ world, movement,     │
+                        │ combat, loot, rules  │
+                        └──────────────────────┘
+                                   ▲
+                                   │ observations / actions
+                        ┌──────────┴───────────┐
+                        │ Bot controllers      │
+                        └──────────────────────┘
 ```
 
-See [`docs/project-writeup.md`](docs/project-writeup.md), [`docs/v0-design.md`](docs/v0-design.md), and [`docs/pvp-extraction-plan.md`](docs/pvp-extraction-plan.md).
+SQLite stores the room seed, player reconnect data, and session records.
+SQLite does not run the real-time simulation loop.
+
+## Why the simulation is separate
+
+The simulation owns the game rules.
+It owns world state, entities, movement, combat, health, cooldowns, gathering, loot, and respawns.
+
+The simulation does not use WebSockets, timers, or the database.
+
+The game server owns connections, identity, input checks, input order, rate limits, scheduling, backpressure, and broadcasts.
+
+This design makes each result repeatable.
+A world seed and an action list can replay the result.
+
+Humans, bots, and future training agents can use the same action interface.
+
+## Client movement prediction
+
+The browser predicts only its own movement on known walkable terrain.
+It does not predict other player positions, hits, or loot results.
+
+```text
+player presses W
+  → browser moves at once and sends action #42
+  → server runs the next shared tick
+  → snapshot confirms action #42
+```
+
+If the server accepts the move, the browser keeps the movement smooth.
+If the server rejects the move, the browser returns to the server position.
+
+Each action has a sequence number.
+The server snapshot confirms the latest processed sequence and the move result.
+
+The browser smooths other players between snapshots.
+The server controls combat and all contested results.
