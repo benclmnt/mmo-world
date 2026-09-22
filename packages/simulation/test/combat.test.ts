@@ -40,6 +40,21 @@ describe("combat, knockout, and extraction", () => {
     expect(simulation.getInventory(2)).toEqual({ wood: 2, stone: 1 }); expect(simulation.createSnapshot().lootPiles).toEqual([]);
   });
 
+
+  test("turns secured materials into a field medkit that heals in the wilderness", () => {
+    const world = new World(1, 5, 3); world.setCamps([{ id: "home", kind: "home", x: 1, y: 1, radius: 1 }]);
+    const simulation = new Simulation(world); simulation.placeEntity({ id: 1, x: 1, y: 1 }); simulation.placeEntity({ id: 2, x: 2, y: 1 });
+    simulation.setSecuredStash(1, { wood: 3, stone: 2 });
+    expect(simulation.step({ actions: new Map([[1, { type: "craft-medkit" }]]) }).events).toContainEqual({ type: "crafted-medkit", entityId: 1 });
+    expect(simulation.createSnapshot(1).entities.find((entity) => entity.id === 1)?.inventory).toMatchObject({ securedStash: { wood: 0, stone: 0 }, medkits: 1 });
+    world.setCamps([]);
+    simulation.step({ actions: new Map([[2, attack("west")]]) });
+    for (let tick = 0; tick < 5; tick++) simulation.step({ actions: new Map() });
+    simulation.step({ actions: new Map([[2, attack("west")]]) });
+    expect(simulation.step({ actions: new Map([[1, { type: "use-medkit" }]]) }).events).toContainEqual({ type: "used-medkit", entityId: 1, healing: 40 });
+    expect(simulation.createSnapshot(1).entities.find((entity) => entity.id === 1)).toMatchObject({ health: 100, inventory: { medkits: 0 } });
+  });
+
   test("deposits anywhere in a camp's safe ring and never exposes another player's balances", () => {
     const world = new World(1, 5, 5); world.setCamps([{ id: "home", kind: "home", x: 2, y: 2, radius: 1 }]);
     const simulation = new Simulation(world); simulation.placeEntity({ id: 1, x: 1, y: 2 }); simulation.placeEntity({ id: 2, x: 0, y: 0 }); simulation.setInventory(1, { wood: 4, stone: 2 });

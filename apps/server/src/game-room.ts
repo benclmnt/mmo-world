@@ -156,6 +156,10 @@ export class GameRoom {
       );
     }
     const result = this.simulation.step({ actions });
+    for (const player of this.players.values()) {
+      if (player.latestAction.type === "craft-medkit" || player.latestAction.type === "use-medkit")
+        player.latestAction = { type: "idle" };
+    }
     const movedEntityIds = new Set(
       result.events
         .filter((event) => event.type === "moved")

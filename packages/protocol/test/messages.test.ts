@@ -6,6 +6,8 @@ describe("action protocol validation", () => {
     expect(isActionMessage({ type: "action", sequence: 0, action: { type: "idle" } })).toBe(true);
     expect(isActionMessage({ type: "action", sequence: 9, action: { type: "move", direction: "west" } })).toBe(true);
     expect(isActionMessage({ type: "action", sequence: 10, action: { type: "gather", direction: "north" } })).toBe(true);
+    expect(isActionMessage({ type: "action", sequence: 11, action: { type: "craft-medkit" } })).toBe(true);
+    expect(isActionMessage({ type: "action", sequence: 12, action: { type: "use-medkit" } })).toBe(true);
   });
 
   test("rejects malformed or unsafe action messages", () => {

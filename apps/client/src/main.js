@@ -12,6 +12,8 @@ const inventory = document.querySelector("#inventory");
 const gatherStatus = document.querySelector("#gather-status");
 const mobileGather = document.querySelector("#mobile-gather");
 const mobileAttack = document.querySelector("#mobile-attack");
+const mobileHeal = document.querySelector("#mobile-heal");
+const craftMedkit = document.querySelector("#craft-medkit");
 const roster = document.querySelector("#player-roster");
 const botSummary = document.querySelector("#bot-summary");
 const infoPanel = document.querySelector(".overlay");
@@ -50,6 +52,14 @@ window.addEventListener("keydown", (event) => {
   if (shortcutsDialog.open) shortcutsDialog.close();
   else showShortcuts();
 });
+
+window.addEventListener("keydown", (event) => {
+  if (isTyping(event.target) || event.repeat) return;
+  if (event.code === "KeyQ") { event.preventDefault(); sendOneShotAction({ type: "craft-medkit" }); }
+  if (event.code === "KeyX") { event.preventDefault(); sendOneShotAction({ type: "use-medkit" }); }
+});
+craftMedkit.addEventListener("click", () => sendOneShotAction({ type: "craft-medkit" }));
+mobileHeal.addEventListener("click", () => sendOneShotAction({ type: "use-medkit" }));
 
 playerName.value = localStorage.getItem("realtime-world.display-name") ?? "";
 playerName.addEventListener("change", () => {
@@ -136,7 +146,9 @@ function applySnapshot(message) {
   if (player === undefined) return;
   const pack = player.inventory?.unsecuredPack ?? { wood: 0, stone: 0 };
   const stash = player.inventory?.securedStash ?? { wood: 0, stone: 0 };
-  inventory.textContent = `Pack: W ${pack.wood} · S ${pack.stone}  |  Stash: W ${stash.wood} · S ${stash.stone}`;
+  const medkits = player.inventory?.medkits ?? 0;
+  inventory.textContent = `Pack: W ${pack.wood} · S ${pack.stone}  |  Stash: W ${stash.wood} · S ${stash.stone}  |  Medkits: ${medkits}`;
+  craftMedkit.disabled = !isAtCamp(player) || stash.wood < 3 || stash.stone < 2;
   updateGatherStatus(player, message.resourceNodes ?? [], message.tick);
 
   if (!message.entities.some((entity) => entity.id === followedPlayerId))
@@ -255,6 +267,17 @@ function isTyping(target) {
   return target instanceof HTMLInputElement
     || target instanceof HTMLTextAreaElement
     || target?.isContentEditable;
+}
+
+function sendOneShotAction(action) {
+  const sequence = nextActionSequence++;
+  send({ type: "action", sequence, action });
+  if (action.type === "craft-medkit") gatherStatus.textContent = "Crafting medkit…";
+  if (action.type === "use-medkit") gatherStatus.textContent = "Using medkit…";
+}
+
+function isAtCamp(player) {
+  return world.camps.some((camp) => (player.x - camp.x) ** 2 + (player.y - camp.y) ** 2 <= camp.radius ** 2);
 }
 
 function sendAction() {

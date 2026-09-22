@@ -20,6 +20,7 @@
           </div>
           <p id="player-status">Connecting…</p>
           <p id="inventory" class="inventory">Wood 0 · Stone 0</p>
+          <button id="craft-medkit" class="craft-medkit" type="button">Craft medkit · 3W 2S</button>
           <p id="gather-status" class="gather-status"></p>
           <pre id="performance-stats" class="performance-stats" hidden aria-live="polite"></pre>
           <label class="name-field">Name <input id="player-name" maxlength="24" placeholder="Guest" autocomplete="nickname" /></label>
@@ -38,6 +39,8 @@
         <div><dt>Move</dt><dd>WASD or arrow keys</dd></div>
         <div><dt>Gather</dt><dd>Hold E</dd></div>
         <div><dt>Attack</dt><dd>Hold F</dd></div>
+        <div><dt>Craft medkit</dt><dd>Q at camp · 3W 2S</dd></div>
+        <div><dt>Use medkit</dt><dd>X · restores 40 HP</dd></div>
         <div><dt>Follow</dt><dd>Click a player</dd></div>
         <div><dt>Pan</dt><dd>Right-drag</dd></div>
         <div><dt>Zoom</dt><dd>Mouse wheel</dd></div>
@@ -52,6 +55,7 @@
     </div>
     <button id="mobile-gather" class="mobile-gather" type="button">Gather</button>
     <button id="mobile-attack" class="mobile-attack" type="button">Attack</button>
+    <button id="mobile-heal" class="mobile-heal" type="button">Heal</button>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

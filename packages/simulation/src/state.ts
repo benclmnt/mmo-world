@@ -2,7 +2,7 @@ import type { Entity } from "./Entity";
 import type { Terrain } from "./Terrain";
 import type { Inventory, ResourceNodeSnapshot } from "./resources";
 
-export interface PrivateInventory { unsecuredPack: Inventory; securedStash: Inventory; }
+export interface PrivateInventory { unsecuredPack: Inventory; securedStash: Inventory; medkits: number; }
 
 export interface SnapshotEntity extends Entity {
   health: number;
