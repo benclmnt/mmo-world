@@ -124,7 +124,7 @@ describe("GameRoom player lifecycle", () => {
 });
 
 describe("GameRoom heuristic agents", () => {
-  test("adds twenty visible bots spanning all three policies by default", () => {
+  test("adds twenty visible bots spanning four policies by default", () => {
     const room = new GameRoom(12345);
     const bots = room
       .snapshotMessage()
@@ -136,9 +136,24 @@ describe("GameRoom heuristic agents", () => {
         "random-walker",
         "persistent-wanderer",
         "obstacle-aware-wanderer",
+        "player-raider",
       ]),
     );
     expect(room.snapshotMessage().entities).toHaveLength(20);
+  });
+
+  test("raiders pursue and attack adjacent human players", () => {
+    const raider = createBot(100, 3, 12345);
+    const observation = {
+      tick: 0,
+      self: { id: 100, x: 10, y: 10 },
+      originX: 6,
+      originY: 6,
+      terrain: Array(81).fill(Terrain.Grass),
+      resourceNodes: [],
+      entities: [{ id: 100, x: 10, y: 10 }, { id: 1, x: 11, y: 10 }],
+    };
+    expect(raider.controller.nextAction(observation, new Set([1]))).toEqual({ type: "attack", direction: "east" });
   });
 
   test("reconsiders an open heading every tick so scouts cannot hold a collision deadlock", () => {

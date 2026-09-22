@@ -149,10 +149,11 @@ export class GameRoom {
       actions.set(player.entityId, player.latestAction);
       player.lastAppliedSequence = player.latestSequence;
     }
+    const playerEntityIds = new Set(this.players.keys());
     for (const bot of this.bots.values()) {
       actions.set(
         bot.entityId,
-        bot.controller.nextAction(this.simulation.observeAgent(bot.entityId)),
+        bot.controller.nextAction(this.simulation.observeAgent(bot.entityId), playerEntityIds),
       );
     }
     const result = this.simulation.step({ actions });

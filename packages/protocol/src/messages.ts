@@ -13,7 +13,7 @@ export interface BotProfile {
   entityId: number;
   kind: "bot";
   displayName: string;
-  policy: "random-walker" | "persistent-wanderer" | "obstacle-aware-wanderer";
+  policy: "random-walker" | "persistent-wanderer" | "obstacle-aware-wanderer" | "player-raider";
 }
 
 export type ActorProfile = PlayerProfile | BotProfile;
