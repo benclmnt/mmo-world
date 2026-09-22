@@ -142,18 +142,29 @@ describe("GameRoom heuristic agents", () => {
     expect(room.snapshotMessage().entities).toHaveLength(20);
   });
 
-  test("raiders pursue and attack adjacent human players", () => {
+  test("spawns raiders outside the protected home-camp ring", () => {
+    const room = new GameRoom(12345, { botCount: 4 });
+    const home = room.worldMessage(room.join()).camps.find((camp) => camp.kind === "home")!;
+    const raider = room.snapshotMessage().actors.find((actor) => actor.kind === "bot" && actor.policy === "player-raider")!;
+    const entity = room.snapshotMessage().entities.find((entity) => entity.id === raider.entityId)!;
+
+    expect((entity.x - home.x) ** 2 + (entity.y - home.y) ** 2).toBeGreaterThan(home.radius ** 2);
+  });
+
+  test("raiders move at half the player movement cadence but can still attack immediately", () => {
     const raider = createBot(100, 3, 12345);
     const observation = {
-      tick: 0,
       self: { id: 100, x: 10, y: 10 },
       originX: 6,
       originY: 6,
       terrain: Array(81).fill(Terrain.Grass),
       resourceNodes: [],
-      entities: [{ id: 100, x: 10, y: 10 }, { id: 1, x: 11, y: 10 }],
+      entities: [{ id: 100, x: 10, y: 10 }],
     };
-    expect(raider.controller.nextAction(observation, new Set([1]))).toEqual({ type: "attack", direction: "east" });
+
+    expect(raider.controller.nextAction({ ...observation, tick: 1 })).toEqual({ type: "idle" });
+    expect(raider.controller.nextAction({ ...observation, tick: 2 })).toMatchObject({ type: "move" });
+    expect(raider.controller.nextAction({ ...observation, tick: 1, entities: [...observation.entities, { id: 1, x: 11, y: 10 }] }, new Set([1]))).toEqual({ type: "attack", direction: "east" });
   });
 
   test("reconsiders an open heading every tick so scouts cannot hold a collision deadlock", () => {

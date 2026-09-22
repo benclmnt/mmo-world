@@ -25,6 +25,8 @@ interface BotController {
 }
 
 const directions: readonly Direction[] = ["north", "east", "south", "west"];
+/** Raiders act every tick, but may only advance once per two simulation ticks. */
+const RAIDER_MOVE_INTERVAL_TICKS = 2;
 
 /** Builds deterministic server-side controllers; each only emits normal actions. */
 export function createBot(
@@ -128,9 +130,11 @@ class PlayerRaider implements BotController {
       .sort((left, right) => manhattan(observation.self, left) - manhattan(observation.self, right) || left.id - right.id)[0];
     if (target) {
       if (manhattan(observation.self, target) === 1) return { type: "attack", direction: directionToward(observation.self, target)! };
+      if (observation.tick % RAIDER_MOVE_INTERVAL_TICKS !== 0) return { type: "idle" };
       const toward = directions.filter((direction) => reducesDistance(observation.self, target, direction) && isOpen(observation, direction));
       if (toward.length > 0) return { type: "move", direction: toward[this.random.nextInt(toward.length)]! };
     }
+    if (observation.tick % RAIDER_MOVE_INTERVAL_TICKS !== 0) return { type: "idle" };
     return new ObstacleAwareWanderer(this.random).nextAction(observation);
   }
 }

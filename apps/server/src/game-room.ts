@@ -2,6 +2,7 @@ import type { EntityId } from "../../../packages/simulation/src/Entity";
 import { createBot, type BotSession } from "./agents";
 import { InputRateLimiter } from "./input-rate-limiter";
 import { generateWorld } from "../../../packages/simulation/src/generation/generateWorld";
+import { campAt } from "../../../packages/simulation/src/camps";
 import { Simulation } from "../../../packages/simulation/src/Simulation";
 import type { Action, StepResult } from "../../../packages/simulation/src/actions";
 import type { Inventory } from "../../../packages/simulation/src/resources";
@@ -67,7 +68,14 @@ export class GameRoom {
     for (let ordinal = 0; ordinal < botCount; ordinal++) {
       const entityId = FIRST_BOT_ENTITY_ID + ordinal;
       const bot = createBot(entityId, ordinal, seed);
-      this.simulation.spawnEntity(entityId, { minSeparation: 2 });
+      this.simulation.spawnEntity(entityId, {
+        minSeparation: 2,
+        // Raiders are hostile NPCs, so never place them inside the protected
+        // home-camp spawn ring where new players appear.
+        isExcluded: bot.policy === "player-raider"
+          ? (x, y) => campAt(this.world, x, y)?.kind === "home"
+          : undefined,
+      });
       this.bots.set(entityId, bot);
     }
   }

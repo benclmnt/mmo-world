@@ -6,6 +6,8 @@ import type { RandomSource } from "./generation/rng";
 export interface SpawnOptions {
   /** Minimum four-direction movement distance from every occupied tile. */
   minSeparation: number;
+  /** Optional world-specific exclusion, such as a protected spawn area. */
+  isExcluded?: (x: number, y: number) => boolean;
 }
 
 export interface SpawnPosition {
@@ -29,7 +31,7 @@ export function chooseSpawnPosition(
 
   for (let y = 0; y < world.height; y++) {
     for (let x = 0; x < world.width; x++) {
-      if (world.get(x, y) !== Terrain.Grass || isOccupied(x, y, entities)) {
+      if (world.get(x, y) !== Terrain.Grass || isOccupied(x, y, entities) || options.isExcluded?.(x, y)) {
         continue;
       }
 
