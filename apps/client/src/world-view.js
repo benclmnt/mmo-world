@@ -40,6 +40,7 @@ export function createWorldView(
   const terrainGroup = new THREE.Group();
   scene.add(terrainGroup);
   const terrainResources = addTerrainMeshes(world, terrainGroup);
+  addCampMarkers(scene, world.camps);
 
   const players = new Map();
   const interpolationDurationMs = 100;
@@ -78,6 +79,8 @@ export function createWorldView(
 
       for (const entity of entities) {
         const player = players.get(entity.id) ?? addPlayer(entity);
+        player.mesh.visible = !entity.knockedOut;
+        setHealth(player, entity.health);
         if (entity.id === playerId && predictionEnabled) {
           reconcileLocalPlayer(player, entity, acknowledgement);
           continue;
@@ -216,6 +219,15 @@ export function createWorldView(
   }
 }
 
+function addCampMarkers(scene, camps) {
+  for (const camp of camps) {
+    const mesh = new THREE.Mesh(new THREE.RingGeometry(camp.radius - 0.08, camp.radius + 0.08, 32), new THREE.MeshBasicMaterial({ color: camp.kind === "home" ? 0x8ee6ff : 0xffd580, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(camp.x, 0.19, camp.y);
+    scene.add(mesh);
+  }
+}
+
 function addLights(scene) {
   scene.add(new THREE.HemisphereLight(0xd9eeff, 0x31502e, 2.2));
 
@@ -246,6 +258,11 @@ function createPlayerMesh(player, isLocalPlayer) {
   group.add(body, head);
   group.position.set(player.x, 0, player.y);
   return group;
+}
+
+function setHealth(player, health) {
+  const body = player.mesh.children[0];
+  if (body?.material?.color) body.material.color.setHSL(Math.max(0, health / 100) * 0.32, 0.72, 0.52);
 }
 
 function playerColor(entityId) {

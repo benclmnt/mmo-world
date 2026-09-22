@@ -5,7 +5,7 @@ import type {
 import type { EntityId } from "../../../packages/simulation/src/Entity";
 import { SeededRandom } from "../../../packages/simulation/src/generation/rng";
 import type { AgentObservation } from "../../../packages/simulation/src/state";
-import { isWalkable } from "../../../packages/simulation/src/Terrain";
+import { isWalkable, Terrain } from "../../../packages/simulation/src/Terrain";
 
 export type BotPolicyName =
   "random-walker" | "persistent-wanderer" | "obstacle-aware-wanderer";
@@ -59,8 +59,8 @@ export function policyForOrdinal(ordinal: number): BotPolicyName {
 class RandomWalker implements BotController {
   constructor(private readonly random: SeededRandom) {}
 
-  nextAction(): Action {
-    return randomActions[this.random.nextInt(randomActions.length)]!;
+  nextAction(observation: AgentObservation): Action {
+    return gatherIfNearby(observation) ?? randomActions[this.random.nextInt(randomActions.length)]!;
   }
 }
 
@@ -70,7 +70,9 @@ class PersistentWanderer implements BotController {
 
   constructor(private readonly random: SeededRandom) {}
 
-  nextAction(): Action {
+  nextAction(observation: AgentObservation): Action {
+    const gather = gatherIfNearby(observation);
+    if (gather !== undefined) return gather;
     if (this.direction === undefined || this.remainingSteps === 0) {
       this.direction = randomDirection(this.random);
       // Commit to a heading for a short, deterministic run.
@@ -85,6 +87,8 @@ class ObstacleAwareWanderer implements BotController {
   constructor(private readonly random: SeededRandom) {}
 
   nextAction(observation: AgentObservation): Action {
+    const gather = gatherIfNearby(observation);
+    if (gather !== undefined) return gather;
     // Pick afresh each tick. Holding a heading here can make two scouts keep
     // proposing the same contested tile forever, even though alternatives are
     // available. The random rotation remains deterministic per bot.
@@ -100,6 +104,20 @@ class ObstacleAwareWanderer implements BotController {
   }
 }
 
+function gatherIfNearby(observation: AgentObservation): Action | undefined {
+  const at = terrainAt(observation, observation.self.x, observation.self.y);
+  if (at === Terrain.Tree || at === Terrain.Rock) return { type: "gather", direction: "north" };
+  for (const direction of directions) {
+    const delta = directionDelta(direction);
+    const terrain = terrainAt(observation, observation.self.x + delta.x, observation.self.y + delta.y);
+    if (terrain === Terrain.Tree || terrain === Terrain.Rock) return { type: "gather", direction };
+  }
+  return undefined;
+}
+
+function terrainAt(observation: AgentObservation, x: number, y: number): Terrain | null | undefined {
+  return observation.terrain[(y - observation.originY) * 9 + x - observation.originX];
+}
 function isOpen(observation: AgentObservation, direction: Direction): boolean {
   const delta = directionDelta(direction);
   const x = observation.self.x + delta.x;

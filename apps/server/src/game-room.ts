@@ -30,7 +30,6 @@ export interface PlayerIdentity {
   guestId?: string;
   displayName?: string;
   reconnectToken?: string;
-  inventory?: Inventory;
 }
 export type PlayerSession = {
   readonly entityId: EntityId;
@@ -91,10 +90,7 @@ export class GameRoom {
       ),
     };
 
-    this.simulation.spawnEntity(entityId, { minSeparation: 0 });
-    if (identity.inventory !== undefined) {
-      this.simulation.setInventory(entityId, identity.inventory);
-    }
+    this.simulation.spawnPlayer(entityId);
     this.players.set(entityId, player);
     return player;
   }
@@ -182,13 +178,14 @@ export class GameRoom {
       width: this.world.width,
       height: this.world.height,
       tiles: [...this.world.tiles],
+      camps: this.world.camps,
     };
   }
 
-  snapshotMessage(): SnapshotMessage {
+  snapshotMessage(recipientEntityId?: EntityId): SnapshotMessage {
     return {
       type: "snapshot",
-      ...this.simulation.createSnapshot(),
+      ...this.simulation.createSnapshot(recipientEntityId),
       actors: [
         ...[...this.players.values()].map((player) => this.profileFor(player)),
         ...[...this.bots.values()].map((bot) => this.profileForBot(bot)),

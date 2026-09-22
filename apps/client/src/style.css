@@ -238,3 +238,6 @@ p { margin-top: 0.25rem; color: #b2c7b7; font-size: 0.875rem; }
 
   #player-status::after { content: " · use the trackpad to move"; }
 }
+
+.mobile-attack { display: none; position: fixed; z-index: 2; right: max(1.5rem, env(safe-area-inset-right)); bottom: max(6rem, calc(env(safe-area-inset-bottom) + 4rem)); min-width: 5.5rem; min-height: 3.5rem; border: 1px solid rgb(255 255 255 / 72%); border-radius: 0.8rem; background: rgb(128 52 52 / 80%); color: #fff4d2; font: 600 0.9rem/1 inherit; touch-action: none; }
+@media (pointer: coarse) and (hover: none) { .mobile-attack { display: block; } }

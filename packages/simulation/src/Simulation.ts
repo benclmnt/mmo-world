@@ -1,442 +1,80 @@
 import type { Entity, EntityId } from "./Entity";
-import type { AgentObservation, SimulationSnapshot, SnapshotEntity } from "./state";
-import type { Action, GatheredEvent, MovementEvent, StepInput, StepResult } from "./actions";
+import type { AgentObservation, LootPileSnapshot, SimulationSnapshot, SnapshotEntity } from "./state";
+import type { Action, AttackEvent, DepositedEvent, GatheredEvent, KnockedOutEvent, LootCollectedEvent, MovementEvent, SimulationEvent, StepInput, StepResult } from "./actions";
 import { isWalkable } from "./Terrain";
-import {
-  createResourceNode,
-  emptyInventory,
-  resourceForTerrain,
-  RESOURCE_REGROWTH_TICKS,
-  type Inventory,
-  type ResourceNode,
-  type ResourceNodeSnapshot,
-} from "./resources";
+import { addInventory, copyInventory, createResourceNode, emptyInventory, resourceForTerrain, RESOURCE_REGROWTH_TICKS, takeFraction, type Inventory, type ResourceNode, type ResourceNodeSnapshot } from "./resources";
 import { hash32, SeededRandom } from "./generation/rng";
 import { chooseSpawnPosition, type SpawnOptions } from "./spawn";
 import { World } from "./World";
 import { directionDelta } from "./movement";
+import { campAt, isSafeAt } from "./camps";
 
-const GATHER_COOLDOWN_TICKS = 5;
+export const HEALTH_MAX = 100;
+const ATTACK_DAMAGE = 20, ATTACK_COOLDOWN_TICKS = 6, GATHER_COOLDOWN_TICKS = 5;
+const REGEN_DELAY_TICKS = 30, REGEN_PER_TICK = 2, RESPAWN_TICKS = 30, PROTECTION_TICKS = 50, LOOT_EXPIRY_TICKS = 300;
+type Position = { x: number; y: number };
+type PlayerState = { unsecuredPack: Inventory; securedStash: Inventory; health: number; facing: "north" | "south" | "east" | "west"; nextAttackTick: number; nextGatherTick: number; lastDamagedTick: number; knockedOut: boolean; respawnsAtTick?: number; protectedUntilTick?: number; };
+type LootPile = LootPileSnapshot;
 
-/**
- * The deterministic world-state owner. Movement actions will be added next;
- * this initial slice owns entity placement, occupancy, and removal.
- */
+/** Pure deterministic owner for movement, combat, camps, loot, and inventories. */
 export class Simulation {
   private readonly entityById = new Map<EntityId, Entity>();
   private readonly occupancy = new Map<number, EntityId>();
-  private readonly inventoryById = new Map<EntityId, Inventory>();
-  private readonly nextGatherTickById = new Map<EntityId, number>();
+  private readonly playerStateById = new Map<EntityId, PlayerState>();
   private readonly resourceNodeByPosition = new Map<number, ResourceNode>();
+  private readonly lootById = new Map<number, LootPile>();
   private readonly rng: SeededRandom;
-  private readonly simulationSeed: number;
+  private nextLootId = 1;
   private tickNumber = 0;
-
-  constructor(readonly world: World, simulationSeed = world.seed) {
-    this.simulationSeed = simulationSeed;
-    this.rng = new SeededRandom(simulationSeed);
-    this.initializeResourceNodes();
+  constructor(readonly world: World, private readonly simulationSeed = world.seed) { this.rng = new SeededRandom(simulationSeed); this.initializeResourceNodes(); }
+  get tick(): number { return this.tickNumber; }
+  get entityCount(): number { return this.entityById.size; }
+  getEntity(id: EntityId): Entity | undefined { const entity = this.entityById.get(id); return entity && { ...entity }; }
+  getEntities(): readonly Entity[] { return [...this.entityById.values()].map((entity) => ({ ...entity })).sort((a, b) => a.id - b.id); }
+  getInventory(id: EntityId): Inventory | undefined { const state = this.playerStateById.get(id); return state && copyInventory(state.unsecuredPack); }
+  getSecuredStash(id: EntityId): Inventory | undefined { const state = this.playerStateById.get(id); return state && copyInventory(state.securedStash); }
+  setInventory(id: EntityId, inventory: Inventory): void { const state = this.requiredPlayerState(id); this.assertInventory(inventory); state.unsecuredPack = copyInventory(inventory); }
+  setSecuredStash(id: EntityId, inventory: Inventory): void { const state = this.requiredPlayerState(id); this.assertInventory(inventory); state.securedStash = copyInventory(inventory); }
+  createSnapshot(privateEntityId?: EntityId): SimulationSnapshot { return { tick: this.tick, entities: this.getEntities().map((entity) => this.snapshotEntity(entity, entity.id === privateEntityId)), resourceNodes: this.getResourceNodeSnapshots(), lootPiles: [...this.lootById.values()].map((pile) => ({ ...pile })).sort((a,b) => a.id-b.id) }; }
+  observeAgent(id: EntityId): AgentObservation { const self = this.getEntity(id); if (!self) throw new Error(`Entity '${id}' does not exist`); const radius=4, originX=self.x-radius, originY=self.y-radius; const terrain=[]; for(let y=originY;y<=self.y+radius;y++) for(let x=originX;x<=self.x+radius;x++) terrain.push(this.world.inBounds(x,y)?this.world.get(x,y):null); return { tick:this.tick, self, originX, originY, terrain, entities:this.getEntities().filter((entity)=>entity.x>=originX&&entity.x<=self.x+radius&&entity.y>=originY&&entity.y<=self.y+radius) }; }
+  isOccupied(x:number,y:number):boolean { return this.occupancy.has(this.positionKey(x,y)); }
+  spawnEntity(id:EntityId, options:SpawnOptions):Entity { this.assertValidEntityId(id); if(this.entityById.has(id)) throw new Error(`Entity '${id}' already exists`); const position=chooseSpawnPosition(this.world,this.entityById,this.rng,options); if(!position) throw new Error("No eligible grass tile is available for spawning"); return this.placeEntity({id,...position}); }
+  spawnPlayer(id:EntityId):Entity { this.assertValidEntityId(id); if(this.entityById.has(id)) throw new Error(`Entity '${id}' already exists`); const home=this.world.camps.find((camp)=>camp.kind==="home"); let entity: Entity; if(!home) { const position=chooseSpawnPosition(this.world,this.entityById,this.rng,{minSeparation:0}); if(!position) throw new Error("No eligible grass tile is available for spawning"); entity=this.placeEntity({id,...position},true); } else { const position=this.availableCampPosition(home.x,home.y,home.radius); if(!position) throw new Error("No home camp spawn tile is available"); entity=this.placeEntity({id,...position}, true); } this.requiredPlayerState(id).protectedUntilTick=this.tickNumber+PROTECTION_TICKS; return entity; }
+  placeEntity(entity:Entity, player=true):Entity { this.assertValidEntityId(entity.id); if(this.entityById.has(entity.id)) throw new Error(`Entity '${entity.id}' already exists`); this.assertValidEntityPosition(entity.x,entity.y); const stored={...entity}; this.entityById.set(entity.id,stored); this.occupancy.set(this.positionKey(stored.x,stored.y),stored.id); if(player) this.playerStateById.set(stored.id,this.freshPlayerState()); return {...stored}; }
+  step(input:StepInput):StepResult {
+    this.regrowDepletedResourceNodes(); this.expireLoot(); this.respawnPlayers();
+    const proposals=this.collectMovementProposals(input.actions); const accepted=this.resolveProposals(proposals); const events:SimulationEvent[]=[...this.applyMoves(proposals,accepted)];
+    this.updateFacingAndProtection(input.actions); events.push(...this.applyGathers(input.actions)); events.push(...this.applyAttacks(input.actions)); events.push(...this.collectLoot()); this.regenerateHealth();
+    this.tickNumber++; return {tick:this.tickNumber,events};
   }
-
-  get tick(): number {
-    return this.tickNumber;
-  }
-
-  get entityCount(): number {
-    return this.entityById.size;
-  }
-
-  getEntity(entityId: EntityId): Entity | undefined {
-    const entity = this.entityById.get(entityId);
-    return entity === undefined ? undefined : { ...entity };
-  }
-
-  getEntities(): readonly Entity[] {
-    return [...this.entityById.values()]
-      .map((entity) => ({ ...entity }))
-      .sort((left, right) => left.id - right.id);
-  }
-
-  getInventory(entityId: EntityId): Inventory | undefined {
-    const inventory = this.inventoryById.get(entityId);
-    return inventory === undefined ? undefined : { ...inventory };
-  }
-
-  setInventory(entityId: EntityId, inventory: Inventory): void {
-    if (!Number.isSafeInteger(inventory.wood) || inventory.wood < 0 ||
-        !Number.isSafeInteger(inventory.stone) || inventory.stone < 0) {
-      throw new Error("Inventory counts must be non-negative safe integers");
-    }
-    if (!this.entityById.has(entityId)) {
-      throw new Error(`Entity '${entityId}' does not exist`);
-    }
-    this.inventoryById.set(entityId, { ...inventory });
-  }
-
-  /**
-   * Returns an independent, deterministic view of the dynamic state. Static
-   * world terrain is intentionally omitted: it is defined once by `world`.
-   */
-  createSnapshot(): SimulationSnapshot {
-    return {
-      tick: this.tick,
-      entities: this.getEntities().map((entity) => this.snapshotEntity(entity)),
-      resourceNodes: this.getResourceNodeSnapshots(),
-    };
-  }
-
-  /**
-   * Returns the 9×9 terrain/entity window centered on an existing entity.
-   * Out-of-bounds terrain cells are represented by null.
-   */
-  observeAgent(entityId: EntityId): AgentObservation {
-    const self = this.getEntity(entityId);
-    if (self === undefined) {
-      throw new Error(`Entity '${entityId}' does not exist`);
-    }
-
-    const radius = 4;
-    const originX = self.x - radius;
-    const originY = self.y - radius;
-    const terrain = [];
-    for (let y = originY; y <= self.y + radius; y++) {
-      for (let x = originX; x <= self.x + radius; x++) {
-        terrain.push(this.world.inBounds(x, y) ? this.world.get(x, y) : null);
-      }
-    }
-
-    const maxX = self.x + radius;
-    const maxY = self.y + radius;
-    const entities = this.getEntities().filter(
-      (entity) => entity.x >= originX && entity.x <= maxX && entity.y >= originY && entity.y <= maxY,
-    );
-
-    return { tick: this.tick, self, originX, originY, terrain, entities };
-  }
-
-  isOccupied(x: number, y: number): boolean {
-    return this.occupancy.has(this.positionKey(x, y));
-  }
-
-  /**
-   * Chooses a random eligible grass tile. The shared spawn selector enforces
-   * the explicit minimum-separation policy and returns no position when that
-   * policy cannot be satisfied.
-   */
-  spawnEntity(entityId: EntityId, options: SpawnOptions): Entity {
-    this.assertValidEntityId(entityId);
-    if (this.entityById.has(entityId)) {
-      throw new Error(`Entity '${entityId}' already exists`);
-    }
-
-    const position = chooseSpawnPosition(this.world, this.entityById, this.rng, options);
-    if (position === undefined) {
-      throw new Error("No eligible grass tile is available for spawning");
-    }
-
-    const entity = { id: entityId, ...position };
-    this.placeEntity(entity);
-    return { ...entity };
-  }
-
-  /** Places an entity at a precisely validated position for setup and tests. */
-  placeEntity(entity: Entity): void {
-    this.assertValidEntityId(entity.id);
-    if (this.entityById.has(entity.id)) {
-      throw new Error(`Entity '${entity.id}' already exists`);
-    }
-    this.assertValidEntityPosition(entity.x, entity.y);
-
-    const stored = { ...entity };
-    this.entityById.set(stored.id, stored);
-    this.inventoryById.set(stored.id, emptyInventory());
-    this.occupancy.set(this.positionKey(stored.x, stored.y), stored.id);
-  }
-
-  /**
-   * Advances the world by one deterministic tick. Every entity has at most one
-   * effective action; absent actions are idle. Movement resolution is based on
-   * the state at the start of this tick and never depends on Map insertion order.
-   */
-  step(input: StepInput): StepResult {
-    this.regrowDepletedResourceNodes();
-    const proposals = this.collectMovementProposals(input.actions);
-    const acceptedIds = this.resolveProposals(proposals);
-    const events: (MovementEvent | GatheredEvent)[] = this.applyMoves(
-      proposals,
-      acceptedIds,
-    );
-    events.push(...this.applyGathers(input.actions));
-
-    this.tickNumber++;
-    return { tick: this.tickNumber, events };
-  }
-
-  removeEntity(entityId: EntityId): boolean {
-    const entity = this.entityById.get(entityId);
-    if (entity === undefined) {
-      return false;
-    }
-
-    this.entityById.delete(entityId);
-    this.inventoryById.delete(entityId);
-    this.nextGatherTickById.delete(entityId);
-    this.occupancy.delete(this.positionKey(entity.x, entity.y));
-    return true;
-  }
-
-  private initializeResourceNodes(): void {
-    for (let y = 0; y < this.world.height; y++) {
-      for (let x = 0; x < this.world.width; x++) {
-        const resource = resourceForTerrain(this.world.get(x, y));
-        if (resource !== undefined) {
-          this.resourceNodeByPosition.set(this.positionKey(x, y), createResourceNode(x, y, resource));
-        }
-      }
-    }
-  }
-
-  private regrowDepletedResourceNodes(): void {
-    for (const node of this.resourceNodeByPosition.values()) {
-      if (node.regrowsAtTick === undefined || node.regrowsAtTick > this.tickNumber) continue;
-      node.remaining = node.capacity;
-      node.regrowsAtTick = undefined;
-    }
-  }
-
-  private getResourceNodeSnapshots(): readonly ResourceNodeSnapshot[] {
-    return [...this.resourceNodeByPosition.values()]
-      .filter((node) => node.remaining < node.capacity)
-      .sort((left, right) => left.y - right.y || left.x - right.x)
-      .map((node) => ({ ...node }));
-  }
-
-  private applyGathers(actions: ReadonlyMap<EntityId, Action>): GatheredEvent[] {
-    const candidatesByNode = new Map<number, GatherCandidate[]>();
-    for (const entity of this.getEntities()) {
-      const action = actions.get(entity.id);
-      if (action?.type !== "gather") continue;
-      if (this.tickNumber < (this.nextGatherTickById.get(entity.id) ?? 0)) continue;
-      const source = this.gatherSource(entity, action);
-      if (source === undefined) continue;
-      const key = this.positionKey(source.x, source.y);
-      const node = this.resourceNodeByPosition.get(key);
-      if (node === undefined || node.remaining === 0) continue;
-      const candidates = candidatesByNode.get(key) ?? [];
-      candidates.push({ entity, node, source });
-      candidatesByNode.set(key, candidates);
-    }
-
-    const winners: GatherCandidate[] = [];
-    for (const candidates of [...candidatesByNode.values()].sort((left, right) =>
-      left[0]!.source.y - right[0]!.source.y || left[0]!.source.x - right[0]!.source.x,
-    )) {
-      winners.push(...this.chooseGatherWinners(candidates));
-    }
-
-    const events: GatheredEvent[] = [];
-    for (const candidate of winners.sort((left, right) => left.entity.id - right.entity.id)) {
-      const { entity, node, source } = candidate;
-      this.inventoryById.get(entity.id)![node.resource]++;
-      node.remaining--;
-      if (node.remaining === 0) node.regrowsAtTick = this.tickNumber + RESOURCE_REGROWTH_TICKS;
-      this.nextGatherTickById.set(entity.id, this.tickNumber + GATHER_COOLDOWN_TICKS);
-      events.push({ type: "gathered", entityId: entity.id, resource: node.resource, quantity: 1, ...source });
-    }
-    return events;
-  }
-
-  /** Selects scarce simultaneous gathers fairly without relying on input/Map order. */
-  private chooseGatherWinners(candidates: readonly GatherCandidate[]): readonly GatherCandidate[] {
-    const available = candidates[0]!.node.remaining;
-    if (candidates.length <= available) return candidates;
-
-    const shuffled = [...candidates].sort((left, right) => left.entity.id - right.entity.id);
-    const source = candidates[0]!.source;
-    const random = new SeededRandom(hash32(this.simulationSeed, source.x, source.y, this.tickNumber));
-    for (let index = shuffled.length - 1; index > 0; index--) {
-      const selected = random.nextInt(index + 1);
-      [shuffled[index], shuffled[selected]] = [shuffled[selected]!, shuffled[index]!];
-    }
-    return shuffled.slice(0, available);
-  }
-
-  private gatherSource(entity: Entity, action: Extract<Action, { type: "gather" }>): Position | undefined {
-    if (resourceForTerrain(this.world.get(entity.x, entity.y)) !== undefined) {
-      return { x: entity.x, y: entity.y };
-    }
-    const delta = directionDelta(action.direction);
-    const target = { x: entity.x + delta.x, y: entity.y + delta.y };
-    return this.world.inBounds(target.x, target.y) ? target : undefined;
-  }
-
-  private snapshotEntity(entity: Entity): SnapshotEntity {
-    return { ...entity, inventory: { ...this.inventoryById.get(entity.id)! } };
-  }
-
-  private collectMovementProposals(actions: ReadonlyMap<EntityId, Action>): Map<EntityId, Position> {
-    const proposals = new Map<EntityId, Position>();
-
-    for (const entity of this.getEntities()) {
-      const action = actions.get(entity.id);
-      if (action?.type !== "move") {
-        continue;
-      }
-
-      const delta = directionDelta(action.direction);
-      const target = { x: entity.x + delta.x, y: entity.y + delta.y };
-      if (this.world.inBounds(target.x, target.y) && isWalkable(this.world.get(target.x, target.y))) {
-        proposals.set(entity.id, target);
-      }
-    }
-
-    return proposals;
-  }
-
-  private resolveProposals(proposals: ReadonlyMap<EntityId, Position>): ReadonlySet<EntityId> {
-    const rejected = new Set<EntityId>();
-    const moversByDestination = new Map<number, EntityId[]>();
-
-    for (const [entityId, target] of proposals) {
-      const key = this.positionKey(target.x, target.y);
-      const movers = moversByDestination.get(key) ?? [];
-      movers.push(entityId);
-      moversByDestination.set(key, movers);
-    }
-
-    // Multiple entities requesting one destination are all rejected.
-    for (const movers of moversByDestination.values()) {
-      if (movers.length > 1) {
-        for (const entityId of movers) {
-          rejected.add(entityId);
-        }
-      }
-    }
-
-    // A direct A <-> B exchange is explicitly disallowed.
-    for (const [entityId, target] of proposals) {
-      if (rejected.has(entityId)) {
-        continue;
-      }
-
-      const occupantId = this.occupancy.get(this.positionKey(target.x, target.y));
-      const entity = this.entityById.get(entityId)!;
-      const occupantTarget = occupantId === undefined ? undefined : proposals.get(occupantId);
-      if (
-        occupantId !== undefined &&
-        occupantTarget !== undefined &&
-        occupantTarget.x === entity.x &&
-        occupantTarget.y === entity.y
-      ) {
-        rejected.add(entityId);
-        rejected.add(occupantId);
-      }
-    }
-
-    const candidates = new Set(
-      [...proposals.keys()].filter((entityId) => !rejected.has(entityId)),
-    );
-    const states = new Map<EntityId, "accepted" | "rejected" | "resolving">();
-
-    const resolve = (entityId: EntityId, path: EntityId[]): boolean => {
-      const state = states.get(entityId);
-      if (state === "accepted") return true;
-      if (state === "rejected") return false;
-      if (state === "resolving") {
-        // Direct swaps were removed above. A remaining cycle has 3+ entities,
-        // and every member successfully vacates the next member's tile.
-        const cycleStart = path.indexOf(entityId);
-        for (const cycleEntityId of path.slice(cycleStart)) {
-          states.set(cycleEntityId, "accepted");
-        }
-        return true;
-      }
-
-      states.set(entityId, "resolving");
-      path.push(entityId);
-      const target = proposals.get(entityId)!;
-      const occupantId = this.occupancy.get(this.positionKey(target.x, target.y));
-
-      let accepted: boolean;
-      if (occupantId === undefined) {
-        accepted = true;
-      } else if (!candidates.has(occupantId)) {
-        accepted = false;
-      } else {
-        accepted = resolve(occupantId, path);
-      }
-
-      path.pop();
-      if (states.get(entityId) !== "accepted") {
-        states.set(entityId, accepted ? "accepted" : "rejected");
-      }
-      return states.get(entityId) === "accepted";
-    };
-
-    for (const entityId of [...candidates].sort((left, right) => left - right)) {
-      resolve(entityId, []);
-    }
-
-    return new Set(
-      [...candidates].filter((entityId) => states.get(entityId) === "accepted"),
-    );
-  }
-
-  private applyMoves(
-    proposals: ReadonlyMap<EntityId, Position>,
-    acceptedIds: ReadonlySet<EntityId>,
-  ): MovementEvent[] {
-    const events: MovementEvent[] = [];
-
-    for (const entityId of acceptedIds) {
-      const entity = this.entityById.get(entityId)!;
-      this.occupancy.delete(this.positionKey(entity.x, entity.y));
-    }
-
-    for (const entityId of [...acceptedIds].sort((left, right) => left - right)) {
-      const entity = this.entityById.get(entityId)!;
-      const target = proposals.get(entityId)!;
-      const fromX = entity.x;
-      const fromY = entity.y;
-      entity.x = target.x;
-      entity.y = target.y;
-      this.occupancy.set(this.positionKey(entity.x, entity.y), entityId);
-      events.push({ type: "moved", entityId, fromX, fromY, toX: entity.x, toY: entity.y });
-    }
-
-    return events;
-  }
-
-  private assertValidEntityId(entityId: EntityId): void {
-    if (!Number.isSafeInteger(entityId) || entityId < 0) {
-      throw new Error("Entity ID must be a non-negative safe integer");
-    }
-  }
-
-  private assertValidEntityPosition(x: number, y: number): void {
-    if (!this.world.inBounds(x, y)) {
-      throw new Error(`Entity position (${x}, ${y}) is outside the world`);
-    }
-    if (!isWalkable(this.world.get(x, y))) {
-      throw new Error(`Entity position (${x}, ${y}) is blocked`);
-    }
-    if (this.isOccupied(x, y)) {
-      throw new Error(`Entity position (${x}, ${y}) is occupied`);
-    }
-  }
-
-  private positionKey(x: number, y: number): number {
-    return y * this.world.width + x;
-  }
-}
-
-interface GatherCandidate {
-  entity: Entity;
-  node: ResourceNode;
-  source: Position;
-}
-
-interface Position {
-  x: number;
-  y: number;
+  removeEntity(id:EntityId):boolean { const entity=this.entityById.get(id); if(!entity) return false; this.entityById.delete(id); this.playerStateById.delete(id); this.occupancy.delete(this.positionKey(entity.x,entity.y)); return true; }
+  private freshPlayerState():PlayerState { return { unsecuredPack:emptyInventory(), securedStash:emptyInventory(), health:HEALTH_MAX, facing:"north", nextAttackTick:0, nextGatherTick:0, lastDamagedTick:-Infinity, knockedOut:false }; }
+  private initializeResourceNodes():void { for(let y=0;y<this.world.height;y++) for(let x=0;x<this.world.width;x++) { const resource=resourceForTerrain(this.world.get(x,y)); if(resource) this.resourceNodeByPosition.set(this.positionKey(x,y),createResourceNode(x,y,resource)); } }
+  private regrowDepletedResourceNodes():void { for(const node of this.resourceNodeByPosition.values()) if(node.regrowsAtTick!==undefined&&node.regrowsAtTick<=this.tickNumber){node.remaining=node.capacity;node.regrowsAtTick=undefined;} }
+  private expireLoot():void { for(const [id,pile] of this.lootById) if(pile.expiresAtTick<=this.tickNumber) this.lootById.delete(id); }
+  private respawnPlayers():void { for(const [id,state] of this.playerStateById) if(state.knockedOut&&state.respawnsAtTick!==undefined&&state.respawnsAtTick<=this.tickNumber){ const entity=this.entityById.get(id)!; const home=this.world.camps.find((camp)=>camp.kind==="home"); if(!home) continue; const position=this.availableCampPosition(home.x,home.y,home.radius); if(!position) continue; entity.x=position.x;entity.y=position.y;this.occupancy.set(this.positionKey(entity.x,entity.y),id); state.health=HEALTH_MAX;state.knockedOut=false;state.respawnsAtTick=undefined;state.protectedUntilTick=this.tickNumber+PROTECTION_TICKS; } }
+  private getResourceNodeSnapshots():readonly ResourceNodeSnapshot[] { return [...this.resourceNodeByPosition.values()].filter((node)=>node.remaining<node.capacity).sort((a,b)=>a.y-b.y||a.x-b.x).map((node)=>({...node})); }
+  private updateFacingAndProtection(actions:ReadonlyMap<EntityId,Action>):void { for(const [id,state] of this.playerStateById){ const action=actions.get(id); if(action?.type==="move"||action?.type==="gather"||action?.type==="attack") state.facing=action.direction; const entity=this.entityById.get(id)!; if(action?.type==="attack") state.protectedUntilTick=undefined; if(!isSafeAt(this.world,entity.x,entity.y)) state.protectedUntilTick=undefined; } }
+  private applyGathers(actions:ReadonlyMap<EntityId,Action>):SimulationEvent[] { const events:SimulationEvent[]=[]; const candidatesByNode=new Map<number,{entity:Entity;node:ResourceNode;source:Position}[]>();
+    for(const entity of this.getEntities()){ const state=this.playerStateById.get(entity.id); const action=actions.get(entity.id); if(!state||state.knockedOut||action?.type!=="gather") continue; const camp=campAt(this.world,entity.x,entity.y); if(camp&&entity.x===camp.x&&entity.y===camp.y){ if(state.unsecuredPack.wood||state.unsecuredPack.stone){const moved=copyInventory(state.unsecuredPack);addInventory(state.securedStash,moved);state.unsecuredPack=emptyInventory();events.push({type:"deposited",entityId:entity.id,campId:camp.id,...moved} as DepositedEvent);} continue; } if(this.tickNumber<state.nextGatherTick) continue; const source=this.gatherSource(entity,action); if(!source) continue; const node=this.resourceNodeByPosition.get(this.positionKey(source.x,source.y)); if(!node||node.remaining===0) continue; const candidates=candidatesByNode.get(this.positionKey(source.x,source.y))??[]; candidates.push({entity,node,source});candidatesByNode.set(this.positionKey(source.x,source.y),candidates); }
+    const winners=[] as {entity:Entity;node:ResourceNode;source:Position}[]; for(const candidates of [...candidatesByNode.values()].sort((a,b)=>a[0]!.source.y-b[0]!.source.y||a[0]!.source.x-b[0]!.source.x)) winners.push(...this.chooseGatherWinners(candidates));
+    for(const candidate of winners.sort((a,b)=>a.entity.id-b.entity.id)){ const state=this.requiredPlayerState(candidate.entity.id); state.unsecuredPack[candidate.node.resource]++;candidate.node.remaining--;if(candidate.node.remaining===0) candidate.node.regrowsAtTick=this.tickNumber+RESOURCE_REGROWTH_TICKS;state.nextGatherTick=this.tickNumber+GATHER_COOLDOWN_TICKS;events.push({type:"gathered",entityId:candidate.entity.id,resource:candidate.node.resource,quantity:1,...candidate.source} as GatheredEvent); } return events; }
+  private applyAttacks(actions:ReadonlyMap<EntityId,Action>):SimulationEvent[] { const hits:AttackEvent[]=[]; for(const entity of this.getEntities()){const state=this.playerStateById.get(entity.id), action=actions.get(entity.id);if(!state||state.knockedOut||action?.type!=="attack"||this.tickNumber<state.nextAttackTick||this.isProtected(entity.id)) continue;const d=directionDelta(action.direction), targetId=this.occupancy.get(this.positionKey(entity.x+d.x,entity.y+d.y));if(targetId===undefined)continue;const target=this.playerStateById.get(targetId);if(!target||target.knockedOut||this.isProtected(targetId)||isSafeAt(this.world,entity.x,entity.y)||isSafeAt(this.world,entity.x+d.x,entity.y+d.y))continue;state.nextAttackTick=this.tickNumber+ATTACK_COOLDOWN_TICKS;hits.push({type:"attacked",entityId:entity.id,targetId,damage:ATTACK_DAMAGE});}
+    const damage=new Map<EntityId,number>();for(const hit of hits) damage.set(hit.targetId,(damage.get(hit.targetId)??0)+hit.damage); const events:SimulationEvent[]=[...hits]; for(const [id,amount] of [...damage].sort((a,b)=>a[0]-b[0])){const state=this.requiredPlayerState(id);state.health-=amount;state.lastDamagedTick=this.tickNumber;if(state.health<=0)events.push(...this.knockOut(id));}return events; }
+  private knockOut(id:EntityId):KnockedOutEvent[] {const state=this.requiredPlayerState(id);if(state.knockedOut)return[];const entity=this.entityById.get(id)!;state.health=0;state.knockedOut=true;state.respawnsAtTick=this.tickNumber+RESPAWN_TICKS;state.protectedUntilTick=undefined;this.occupancy.delete(this.positionKey(entity.x,entity.y));const dropped=takeFraction(state.unsecuredPack,1,2);if(dropped.wood||dropped.stone)this.lootById.set(this.nextLootId,{id:this.nextLootId++,x:entity.x,y:entity.y,...dropped,expiresAtTick:this.tickNumber+LOOT_EXPIRY_TICKS});return[{type:"knocked-out",entityId:id,x:entity.x,y:entity.y}];}
+  private collectLoot():LootCollectedEvent[]{const events:LootCollectedEvent[]=[];for(const pile of [...this.lootById.values()].sort((a,b)=>a.id-b.id)){const collector=this.occupancy.get(this.positionKey(pile.x,pile.y));if(collector===undefined)continue;const state=this.playerStateById.get(collector);if(!state||state.knockedOut)continue;addInventory(state.unsecuredPack,pile);this.lootById.delete(pile.id);events.push({type:"loot-collected",entityId:collector,lootId:pile.id,wood:pile.wood,stone:pile.stone});}return events;}
+  private regenerateHealth():void {for(const state of this.playerStateById.values())if(!state.knockedOut&&state.health<HEALTH_MAX&&this.tickNumber-state.lastDamagedTick>=REGEN_DELAY_TICKS)state.health=Math.min(HEALTH_MAX,state.health+REGEN_PER_TICK);}
+  private isProtected(id:EntityId):boolean {const state=this.requiredPlayerState(id);const entity=this.entityById.get(id)!;return isSafeAt(this.world,entity.x,entity.y)||(state.protectedUntilTick!==undefined&&this.tickNumber<state.protectedUntilTick);}
+  private chooseGatherWinners<T extends {entity:Entity;node:ResourceNode;source:Position}>(candidates:readonly T[]):readonly T[]{const available=candidates[0]!.node.remaining;if(candidates.length<=available)return candidates;const shuffled=[...candidates].sort((a,b)=>a.entity.id-b.entity.id),source=candidates[0]!.source,random=new SeededRandom(hash32(this.simulationSeed,source.x,source.y,this.tickNumber));for(let i=shuffled.length-1;i>0;i--){const selected=random.nextInt(i+1);[shuffled[i],shuffled[selected]]=[shuffled[selected]!,shuffled[i]!];}return shuffled.slice(0,available);}
+  private gatherSource(entity:Entity,action:Extract<Action,{type:"gather"}>):Position|undefined{if(resourceForTerrain(this.world.get(entity.x,entity.y)))return{x:entity.x,y:entity.y};const d=directionDelta(action.direction),target={x:entity.x+d.x,y:entity.y+d.y};return this.world.inBounds(target.x,target.y)?target:undefined;}
+  private snapshotEntity(entity:Entity,includeInventory:boolean):SnapshotEntity {const state=this.playerStateById.get(entity.id);if(!state)return{...entity,health:HEALTH_MAX,facing:"north",knockedOut:false,protected:false};return{...entity,health:state.health,facing:state.facing,knockedOut:state.knockedOut,respawnsAtTick:state.respawnsAtTick,protected:this.isProtected(entity.id),...(includeInventory?{inventory:{unsecuredPack:copyInventory(state.unsecuredPack),securedStash:copyInventory(state.securedStash)}}:{})};}
+  private collectMovementProposals(actions:ReadonlyMap<EntityId,Action>):Map<EntityId,Position>{const proposals=new Map<EntityId,Position>();for(const entity of this.getEntities()){const state=this.playerStateById.get(entity.id);if(state?.knockedOut)continue;const action=actions.get(entity.id);if(action?.type!=="move")continue;const d=directionDelta(action.direction),target={x:entity.x+d.x,y:entity.y+d.y};if(this.world.inBounds(target.x,target.y)&&isWalkable(this.world.get(target.x,target.y)))proposals.set(entity.id,target);}return proposals;}
+  private resolveProposals(proposals:ReadonlyMap<EntityId,Position>):ReadonlySet<EntityId>{const rejected=new Set<EntityId>(),byDestination=new Map<number,EntityId[]>();for(const [id,target]of proposals){const movers=byDestination.get(this.positionKey(target.x,target.y))??[];movers.push(id);byDestination.set(this.positionKey(target.x,target.y),movers);}for(const movers of byDestination.values())if(movers.length>1)for(const id of movers)rejected.add(id);for(const[id,target]of proposals){if(rejected.has(id))continue;const occupant=this.occupancy.get(this.positionKey(target.x,target.y)),entity=this.entityById.get(id)!,occupantTarget=occupant===undefined?undefined:proposals.get(occupant);if(occupant!==undefined&&occupantTarget?.x===entity.x&&occupantTarget.y===entity.y){rejected.add(id);rejected.add(occupant);}}const candidates=new Set([...proposals.keys()].filter((id)=>!rejected.has(id))),states=new Map<EntityId,"accepted"|"rejected"|"resolving">();const resolve=(id:EntityId,path:EntityId[]):boolean=>{const state=states.get(id);if(state==="accepted")return true;if(state==="rejected")return false;if(state==="resolving"){for(const cycleId of path.slice(path.indexOf(id)))states.set(cycleId,"accepted");return true;}states.set(id,"resolving");path.push(id);const target=proposals.get(id)!,occupant=this.occupancy.get(this.positionKey(target.x,target.y));const accepted=occupant===undefined?true:!candidates.has(occupant)?false:resolve(occupant,path);path.pop();if(states.get(id)!=="accepted")states.set(id,accepted?"accepted":"rejected");return states.get(id)==="accepted";};for(const id of [...candidates].sort((a,b)=>a-b))resolve(id,[]);return new Set([...candidates].filter((id)=>states.get(id)==="accepted"));}
+  private applyMoves(proposals:ReadonlyMap<EntityId,Position>,accepted:ReadonlySet<EntityId>):MovementEvent[]{for(const id of accepted){const entity=this.entityById.get(id)!;this.occupancy.delete(this.positionKey(entity.x,entity.y));}const events=[] as MovementEvent[];for(const id of [...accepted].sort((a,b)=>a-b)){const entity=this.entityById.get(id)!,target=proposals.get(id)!,fromX=entity.x,fromY=entity.y;entity.x=target.x;entity.y=target.y;this.occupancy.set(this.positionKey(entity.x,entity.y),id);events.push({type:"moved",entityId:id,fromX,fromY,toX:entity.x,toY:entity.y});}return events;}
+  private availableCampPosition(x:number,y:number,radius:number):Position|undefined{for(let d=0;d<=radius;d++)for(let oy=-d;oy<=d;oy++)for(let ox=-d;ox<=d;ox++){if(Math.abs(ox)+Math.abs(oy)!==d)continue;const target={x:x+ox,y:y+oy};if(this.world.inBounds(target.x,target.y)&&isWalkable(this.world.get(target.x,target.y))&&!this.isOccupied(target.x,target.y))return target;}return undefined;}
+  private requiredPlayerState(id:EntityId):PlayerState{const state=this.playerStateById.get(id);if(!state)throw new Error(`Entity '${id}' is not a player`);return state;}
+  private assertInventory(i:Inventory):void{if(!Number.isSafeInteger(i.wood)||i.wood<0||!Number.isSafeInteger(i.stone)||i.stone<0)throw new Error("Inventory counts must be non-negative safe integers");}
+  private assertValidEntityId(id:EntityId):void{if(!Number.isSafeInteger(id)||id<0)throw new Error("Entity ID must be a non-negative safe integer");}
+  private assertValidEntityPosition(x:number,y:number):void{if(!this.world.inBounds(x,y))throw new Error(`Entity position (${x}, ${y}) is outside the world`);if(!isWalkable(this.world.get(x,y)))throw new Error(`Entity position (${x}, ${y}) is blocked`);if(this.isOccupied(x,y))throw new Error(`Entity position (${x}, ${y}) is occupied`);}
+  private positionKey(x:number,y:number):number{return y*this.world.width+x;}
 }

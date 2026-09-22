@@ -35,6 +35,9 @@ const metrics = {
   maxTickIntervalMs: 0,
   lastSnapshotBuildDurationMs: 0,
   lastBroadcastDurationMs: 0,
+  lootCollected: 0,
+  deposits: 0,
+  knockouts: 0,
 };
 let lastTickStartedAt = performance.now();
 
@@ -88,7 +91,7 @@ const server = Bun.serve<PlayerSession>({
       send(socket.data.entityId, room.worldMessage(socket.data), false);
       send(
         socket.data.entityId,
-        { ...room.snapshotMessage(), serverSentAtMs: Date.now() },
+        { ...room.snapshotMessage(socket.data.entityId), serverSentAtMs: Date.now() },
         false,
       );
       log("connection_open", {
@@ -115,10 +118,6 @@ const server = Bun.serve<PlayerSession>({
     },
     close(socket) {
       sockets.delete(socket.data.entityId);
-      const inventory = room.inventoryFor(socket.data.entityId);
-      if (inventory !== undefined) {
-        persistence.updateInventory(socket.data.guestId, inventory);
-      }
       persistence.closeSession(socket.data.sessionId);
       if (!room.leave(socket.data.entityId)) return;
       broadcastSnapshot();
@@ -139,7 +138,7 @@ setInterval(() => {
   );
   lastTickStartedAt = started;
   const result = room.step();
-  persistGatheredInventories(result.events);
+  recordGameplayEvents(result.events);
   broadcastSnapshot();
   const durationMs = performance.now() - started;
   metrics.lastTickDurationMs = durationMs;
@@ -161,27 +160,20 @@ log("server_started", {
   ticksPerSecond: TICKS_PER_SECOND,
 });
 
-function persistGatheredInventories(events: readonly { type: string; entityId: number }[]): void {
+function recordGameplayEvents(events: readonly { type: string }[]): void {
   for (const event of events) {
-    if (event.type !== "gathered") continue;
-    const player = sockets.get(event.entityId)?.socket.data;
-    const inventory = room.inventoryFor(event.entityId);
-    if (player !== undefined && inventory !== undefined) {
-      persistence.updateInventory(player.guestId, inventory);
-    }
+    if (event.type === "knocked-out") metrics.knockouts++;
+    if (event.type === "loot-collected") metrics.lootCollected++;
+    if (event.type === "deposited") metrics.deposits++;
   }
 }
 
 function broadcastSnapshot(): void {
   const buildStartedAt = performance.now();
-  const payload = JSON.stringify({
-    ...room.snapshotMessage(),
-    serverSentAtMs: Date.now(),
-  });
+  const payloads = [...sockets.keys()].map((entityId) => [entityId, JSON.stringify({ ...room.snapshotMessage(entityId), serverSentAtMs: Date.now() })] as const);
   metrics.lastSnapshotBuildDurationMs = performance.now() - buildStartedAt;
-
   const broadcastStartedAt = performance.now();
-  for (const entityId of sockets.keys()) sendSerialized(entityId, payload, true);
+  for (const [entityId, payload] of payloads) sendSerialized(entityId, payload, true);
   metrics.lastBroadcastDurationMs = performance.now() - broadcastStartedAt;
 }
 

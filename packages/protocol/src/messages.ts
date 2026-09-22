@@ -1,4 +1,5 @@
 import type { Action } from "../../simulation/src/actions";
+import type { Camp } from "../../simulation/src/camps";
 import type { SimulationSnapshot } from "../../simulation/src/state";
 
 export interface PlayerProfile {
@@ -27,6 +28,7 @@ export interface WorldMessage {
   width: number;
   height: number;
   tiles: readonly number[];
+  camps: readonly Camp[];
 }
 
 export interface ActionAcknowledgement {
@@ -76,7 +78,7 @@ export function isActionMessage(value: unknown): value is ActionMessage {
 
   return (
     value.action.type === "idle" ||
-    ((value.action.type === "move" || value.action.type === "gather") &&
+    ((value.action.type === "move" || value.action.type === "gather" || value.action.type === "attack") &&
       isDirection(value.action.direction))
   );
 }

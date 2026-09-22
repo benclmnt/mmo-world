@@ -11,6 +11,7 @@ const playerName = document.querySelector("#player-name");
 const inventory = document.querySelector("#inventory");
 const gatherStatus = document.querySelector("#gather-status");
 const mobileGather = document.querySelector("#mobile-gather");
+const mobileAttack = document.querySelector("#mobile-attack");
 const roster = document.querySelector("#player-roster");
 const botSummary = document.querySelector("#bot-summary");
 const infoPanel = document.querySelector(".overlay");
@@ -63,11 +64,10 @@ const movementInput = createMovementInput((action) => {
   latestAction = action;
   sendAction();
 });
-for (const eventName of ["pointerdown", "pointerup", "pointercancel", "pointerleave"]) {
-  mobileGather.addEventListener(eventName, (event) => {
-    event.preventDefault();
-    movementInput.setGathering(eventName === "pointerdown");
-  });
+for (const [button, setter] of [[mobileGather, "setGathering"], [mobileAttack, "setAttacking"]]) {
+  for (const eventName of ["pointerdown", "pointerup", "pointercancel", "pointerleave"]) {
+    button.addEventListener(eventName, (event) => { event.preventDefault(); movementInput[setter](eventName === "pointerdown"); });
+  }
 }
 createMobileTrackpad(
   document.querySelector("#mobile-trackpad"),
@@ -116,6 +116,7 @@ function initializeWorld(message) {
     message.height,
     new Uint8Array(message.tiles),
   );
+  world.setCamps(message.camps ?? []);
   if (typeof message.reconnectToken === "string" && message.reconnectToken.length > 0) {
     localStorage.setItem("realtime-world.reconnect-token", message.reconnectToken);
   }
@@ -133,7 +134,9 @@ function applySnapshot(message) {
 
   const player = message.entities.find((entity) => entity.id === playerId);
   if (player === undefined) return;
-  inventory.textContent = `Wood ${player.inventory?.wood ?? 0} · Stone ${player.inventory?.stone ?? 0}`;
+  const pack = player.inventory?.unsecuredPack ?? { wood: 0, stone: 0 };
+  const stash = player.inventory?.securedStash ?? { wood: 0, stone: 0 };
+  inventory.textContent = `Pack: W ${pack.wood} · S ${pack.stone}  |  Stash: W ${stash.wood} · S ${stash.stone}`;
   updateGatherStatus(player, message.resourceNodes ?? [], message.tick);
 
   if (!message.entities.some((entity) => entity.id === followedPlayerId))
@@ -160,9 +163,11 @@ function applySnapshot(message) {
     (actor) => actor.kind === "bot",
   ).length;
   const playerCount = message.actors.length - botCount;
-  setStatus(
-    `${player.x}, ${player.y} · ${playerCount} player${playerCount === 1 ? "" : "s"} · ${botCount} bots`,
-  );
+  if (player.knockedOut) {
+    setStatus(`KO · respawn in ${Math.max(0, (player.respawnsAtTick ?? message.tick) - message.tick)} ticks`);
+  } else {
+    setStatus(`${player.x}, ${player.y} · ${player.health}/100 HP · ${player.protected ? "Protected" : "Vulnerable"} · ${playerCount} player${playerCount === 1 ? "" : "s"} · ${botCount} bots`);
+  }
   performanceMonitor.recordSnapshot(
     message.tick,
     performance.now() - startedAt,
@@ -260,6 +265,11 @@ function sendAction() {
     action: latestAction,
   });
   view?.setLocalAction(latestAction, sequence);
+  if (latestAction.type === "attack") {
+    gatherStatus.textContent = "Attacking…";
+    view?.setLocalAction(latestAction, sequence);
+    return;
+  }
   if (latestAction.type === "gather") {
     // Predict the attempt immediately; inventory/node state stays server-authoritative.
     gatherStatus.textContent = "Gathering…";

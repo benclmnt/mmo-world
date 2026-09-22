@@ -78,7 +78,7 @@ Other players can collect this loot.
 
 After a short delay, the player respawns at the home camp with full health.
 Secured resources are never lost.
-The loot expiry rule is still open.
+After 30 seconds, abandoned loot expires.
 
 New players have short protection after respawn.
 This protection ends when they attack or leave camp.
@@ -151,7 +151,8 @@ Humans, bots, and future training agents can use the same action interface.
 
 ## Client movement prediction
 
-The browser predicts only its own movement on known walkable terrain.
+- Hold **F** (or the mobile Attack button) to attack in the last movement direction.
+
 It does not predict other player positions, hits, or loot results.
 
 ```text

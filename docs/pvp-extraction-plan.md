@@ -1,7 +1,7 @@
 # PvP Extraction MMO — Gameplay Plan
 
-**Status:** Proposed gameplay direction, August 23, 2026. This promotes PvP
-beyond the original v0 design, where combat was explicitly deferred.
+**Status:** First combat/extraction slice implemented September 22, 2026. P4 is
+playtest and tuning work.
 
 ## Player promise
 
@@ -105,9 +105,7 @@ before it adds equipment, crafting, guilds, or permanent territory.
 - The knocked-out player respawns at the **home camp** after a short delay with
   full health and an empty unsecured pack. They keep the remaining unsecured
   half.
-- The first implementation must clean up loot deterministically: a pile either
-  expires after a defined number of ticks or returns to the world as a resource
-  source. We should choose one before implementation.
+- The first implementation expires abandoned loot after **300 ticks (30 seconds)**.
 
 ## What makes this extraction rather than an arena
 
@@ -156,28 +154,17 @@ movement; combat state always follows the server snapshot.
 
 ## Delivery sequence
 
-### P1 — Combat foundation
+### P1 — Combat foundation — implemented
 
-- Add health, attack actions, facing, cooldowns, and attack events to the
-  deterministic simulation.
-- Resolve simultaneous movement and attacks; add exhaustive simulation tests for
-  range, cooldowns, swaps, mutual knockouts, and deterministic replay.
-- Send health and combat state in snapshots; render health and hit feedback.
+- Health, facing, directional attacks, simultaneous damage, cooldowns, and narrow client movement prediction are live.
 
-### P2 — Knockout and loot
+### P2 — Knockout and loot — implemented
 
-- Add knockout state, respawn scheduling, loot-pile entities, collection, and
-  deterministic expiry.
-- Add one central home camp, two deposit-only field camps, and respawn
-  protection. Keep safe radii small and resource nodes outside them.
-- Test that dropped/collected loot is conserved and cannot duplicate.
+- Home/field camps, safety/protection, KO recovery, shared loot piles, and deterministic expiry are live.
 
-### P3 — Extraction
+### P3 — Extraction — implemented
 
-- Split inventory into unsecured pack and secured stash.
-- Add a camp deposit interaction and clear UI for risk versus secured value.
-- Instrument the loop: gathers, attacks, knockouts, loot collected, deposits,
-  and return visits.
+- Unsecured packs, secured stashes, camp deposits, private per-recipient balances, and gameplay counters are live. Stashes are deliberately session-scoped; SQLite stores identity and sessions only.
 
 ### P4 — Contested-world tuning
 

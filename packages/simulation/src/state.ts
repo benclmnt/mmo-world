@@ -1,29 +1,18 @@
-import type { Entity, EntityId } from "./Entity";
+import type { Entity } from "./Entity";
 import type { Terrain } from "./Terrain";
 import type { Inventory, ResourceNodeSnapshot } from "./resources";
 
+export interface PrivateInventory { unsecuredPack: Inventory; securedStash: Inventory; }
+
 export interface SnapshotEntity extends Entity {
-  /** Per-session resources; copied so snapshots cannot mutate simulation state. */
-  inventory: Inventory;
+  health: number;
+  facing: "north" | "south" | "east" | "west";
+  knockedOut: boolean;
+  respawnsAtTick?: number;
+  protected: boolean;
+  /** Included only in the recipient's personalized snapshot. */
+  inventory?: PrivateInventory;
 }
-
-/** A serializable, point-in-time view of dynamic world state. */
-export interface SimulationSnapshot {
-  tick: number;
-  entities: readonly SnapshotEntity[];
-  /** Only resource nodes below their normal capacity; all omitted nodes are full. */
-  resourceNodes: readonly ResourceNodeSnapshot[];
-}
-
-/** A fixed 9×9 view of the world centered on an entity. */
-export interface AgentObservation {
-  tick: number;
-  self: Entity;
-  /** Top-left world coordinate of the row-major terrain window. */
-  originX: number;
-  originY: number;
-  /** Row-major terrain values; null represents a coordinate outside the world. */
-  terrain: readonly (Terrain | null)[];
-  /** Entities within the observation window, sorted by numeric entity ID. */
-  entities: readonly Entity[];
-}
+export interface LootPileSnapshot { id: number; x: number; y: number; wood: number; stone: number; expiresAtTick: number; }
+export interface SimulationSnapshot { tick: number; entities: readonly SnapshotEntity[]; resourceNodes: readonly ResourceNodeSnapshot[]; lootPiles: readonly LootPileSnapshot[]; }
+export interface AgentObservation { tick: number; self: Entity; originX: number; originY: number; terrain: readonly (Terrain | null)[]; entities: readonly Entity[]; }

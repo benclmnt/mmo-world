@@ -30,17 +30,11 @@ describe("GameRoom player lifecycle", () => {
     expect(room.join().entityId).toBe(3);
   });
 
-  test("restores a persistent inventory into a new session entity", () => {
+  test("keeps gameplay inventory session-scoped", () => {
     const room = new GameRoom(12345, { botCount: 0 });
-    const player = room.join({
-      guestId: "player-uuid",
-      inventory: { wood: 7, stone: 3 },
-    });
-
-    expect(room.inventoryFor(player.entityId)).toEqual({ wood: 7, stone: 3 });
-    expect(room.snapshotMessage().entities).toContainEqual(
-      expect.objectContaining({ id: player.entityId, inventory: { wood: 7, stone: 3 } }),
-    );
+    const player = room.join({ guestId: "player-uuid" });
+    expect(room.inventoryFor(player.entityId)).toEqual({ wood: 0, stone: 0 });
+    expect(room.snapshotMessage(player.entityId).entities.find((entity) => entity.id === player.entityId)).toMatchObject({ inventory: { unsecuredPack: { wood: 0, stone: 0 }, securedStash: { wood: 0, stone: 0 } } });
   });
 
   test("rate limits a flood of otherwise valid client input", () => {
@@ -94,7 +88,7 @@ describe("GameRoom player lifecycle", () => {
     ]);
     room.step();
     expect(room.snapshotMessage().actionAcknowledgements).toEqual([
-      { entityId: first.entityId, sequence: 4, movementAccepted: true },
+      { entityId: first.entityId, sequence: 4, movementAccepted: false },
       { entityId: second.entityId, sequence: -1, movementAccepted: false },
     ]);
 

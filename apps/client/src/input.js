@@ -1,4 +1,5 @@
 const gatherCode = "KeyE";
+const attackCode = "KeyF";
 
 const directionForCode = {
   ArrowUp: "north",
@@ -19,6 +20,7 @@ export function createMovementInput(onActionChange) {
   const heldKeys = new Map();
   let pressOrder = 0;
   let gathering = false;
+  let attacking = false;
   let lastDirection = "north";
 
   function setHeldInput(inputId, direction) {
@@ -43,6 +45,11 @@ export function createMovementInput(onActionChange) {
       }
       return;
     }
+    if (event.code === attackCode) {
+      event.preventDefault();
+      if (!attacking) { attacking = true; onActionChange?.(currentAction()); }
+      return;
+    }
     const direction = directionForCode[event.code];
     if (direction === undefined) return;
 
@@ -61,6 +68,11 @@ export function createMovementInput(onActionChange) {
       }
       return;
     }
+    if (event.code === attackCode) {
+      event.preventDefault();
+      if (attacking) { attacking = false; onActionChange?.(currentAction()); }
+      return;
+    }
     if (directionForCode[event.code] === undefined) return;
 
     event.preventDefault();
@@ -68,13 +80,15 @@ export function createMovementInput(onActionChange) {
   });
 
   window.addEventListener("blur", () => {
-    if (heldKeys.size === 0 && !gathering) return;
+    if (heldKeys.size === 0 && !gathering && !attacking) return;
     heldKeys.clear();
     gathering = false;
+    attacking = false;
     onActionChange?.(currentAction());
   });
 
   function currentAction() {
+    if (attacking) return { type: "attack", direction: lastDirection };
     if (gathering) return { type: "gather", direction: lastDirection };
     let latestHeldKey;
     for (const heldKey of heldKeys.values()) {
@@ -93,6 +107,11 @@ export function createMovementInput(onActionChange) {
     setGathering(value) {
       if (gathering === value) return;
       gathering = value;
+      onActionChange?.(currentAction());
+    },
+    setAttacking(value) {
+      if (attacking === value) return;
+      attacking = value;
       onActionChange?.(currentAction());
     },
     setTouchDirection(direction) {

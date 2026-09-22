@@ -1,6 +1,7 @@
 import { Terrain } from "../Terrain";
 import { World } from "../World";
 import { analyzeWalkableConnectivity } from "./connectivity";
+import { createCamps, distanceSquared } from "../camps";
 import { valueNoise2D } from "./noise";
 import { hash32, hashToUnit } from "./rng";
 
@@ -32,6 +33,12 @@ export function generateWorld(options: WorldGenerationOptions): World {
     const world = generateCandidate(options.seed, terrainSeed, width, height, attempt);
 
     if (analyzeWalkableConnectivity(world).isFullyConnected) {
+      const camps = createCamps(world);
+      // Camps are intentional clearings: no resource can be gathered under safety.
+      for (const camp of camps) for (let y = 0; y < world.height; y++) for (let x = 0; x < world.width; x++) {
+        if (distanceSquared(camp, { x, y }) <= camp.radius * camp.radius) world.set(x, y, Terrain.Grass);
+      }
+      world.setCamps(camps);
       return world;
     }
   }
