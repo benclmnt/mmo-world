@@ -14,20 +14,36 @@
           <span>Realtime World</span><span aria-hidden="true">⌄</span>
         </button>
         <div id="info-panel-details" class="info-panel-details">
-        <h1>Realtime World</h1>
-        <p>Seed <span id="world-seed"></span> · generated 64×64 terrain</p>
-        <p id="player-status">WASD / arrow keys to move · hold E to gather</p>
-        <p id="inventory" class="inventory">Wood 0 · Stone 0</p>
-        <p id="gather-status" class="gather-status">Hold E / Gather near a tree or rock</p>
-        <pre id="performance-stats" class="performance-stats" hidden aria-live="polite"></pre>
-        <label class="name-field">Display name <input id="player-name" maxlength="24" placeholder="Guest" autocomplete="nickname" /></label>
-        <p class="roster-title">Players · click a name to follow</p>
-        <ul id="player-roster" aria-label="Connected players"></ul>
-        <p id="bot-summary" class="bot-summary">Bots · loading…</p>
-        <p>Right-drag pans · wheel zooms · R resets camera</p>
+          <div class="overlay-heading">
+            <h1>Realtime World</h1>
+            <button id="shortcuts-toggle" class="shortcuts-toggle" type="button" aria-label="Show shortcuts" aria-haspopup="dialog">?</button>
+          </div>
+          <p id="player-status">Connecting…</p>
+          <p id="inventory" class="inventory">Wood 0 · Stone 0</p>
+          <p id="gather-status" class="gather-status"></p>
+          <pre id="performance-stats" class="performance-stats" hidden aria-live="polite"></pre>
+          <label class="name-field">Name <input id="player-name" maxlength="24" placeholder="Guest" autocomplete="nickname" /></label>
+          <p class="roster-title">Players</p>
+          <ul id="player-roster" aria-label="Connected players"></ul>
+          <p id="bot-summary" class="bot-summary">Bots · loading…</p>
         </div>
       </section>
     </main>
+    <dialog id="shortcuts-dialog" class="shortcuts-dialog" aria-labelledby="shortcuts-title">
+      <div class="shortcuts-heading">
+        <h2 id="shortcuts-title">Shortcuts</h2>
+        <button id="shortcuts-close" class="shortcuts-close" type="button" aria-label="Close shortcuts">×</button>
+      </div>
+      <dl>
+        <div><dt>Move</dt><dd>WASD or arrow keys</dd></div>
+        <div><dt>Gather</dt><dd>Hold E</dd></div>
+        <div><dt>Follow</dt><dd>Click a player</dd></div>
+        <div><dt>Pan</dt><dd>Right-drag</dd></div>
+        <div><dt>Zoom</dt><dd>Mouse wheel</dd></div>
+        <div><dt>Reset camera</dt><dd>R</dd></div>
+      </dl>
+      <p class="shortcuts-hint">Press ? or Esc to close</p>
+    </dialog>
     <div id="mobile-trackpad" class="mobile-trackpad" hidden aria-label="Movement trackpad" role="application">
       <div class="mobile-trackpad__guide" aria-hidden="true"></div>
       <div class="mobile-trackpad__thumb" aria-hidden="true"></div>

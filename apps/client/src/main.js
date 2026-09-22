@@ -7,7 +7,6 @@ import { createPerformanceMonitor } from "./performance-monitor.js";
 import { createWorldView } from "./world-view.js";
 
 const playerStatus = document.querySelector("#player-status");
-const worldSeed = document.querySelector("#world-seed");
 const playerName = document.querySelector("#player-name");
 const inventory = document.querySelector("#inventory");
 const gatherStatus = document.querySelector("#gather-status");
@@ -16,6 +15,9 @@ const roster = document.querySelector("#player-roster");
 const botSummary = document.querySelector("#bot-summary");
 const infoPanel = document.querySelector(".overlay");
 const mobileInfoToggle = document.querySelector("#mobile-info-toggle");
+const shortcutsDialog = document.querySelector("#shortcuts-dialog");
+const shortcutsToggle = document.querySelector("#shortcuts-toggle");
+const shortcutsClose = document.querySelector("#shortcuts-close");
 const performanceMonitor = createPerformanceMonitor(
   document.querySelector("#performance-stats"),
 );
@@ -35,6 +37,17 @@ roster.addEventListener("click", selectFollowTarget);
 mobileInfoToggle.addEventListener("click", () => {
   const isExpanded = infoPanel.classList.toggle("is-expanded");
   mobileInfoToggle.setAttribute("aria-expanded", String(isExpanded));
+});
+shortcutsToggle.addEventListener("click", showShortcuts);
+shortcutsClose.addEventListener("click", () => shortcutsDialog.close());
+shortcutsDialog.addEventListener("click", (event) => {
+  if (event.target === shortcutsDialog) shortcutsDialog.close();
+});
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "?" || event.repeat || isTyping(event.target)) return;
+  event.preventDefault();
+  if (shortcutsDialog.open) shortcutsDialog.close();
+  else showShortcuts();
 });
 
 playerName.value = localStorage.getItem("realtime-world.display-name") ?? "";
@@ -109,7 +122,6 @@ function initializeWorld(message) {
   playerId = message.playerId;
   followedPlayerId = playerId;
   nextActionSequence = 0;
-  worldSeed.textContent = String(world.seed);
   if (playerName.value.trim().length === 0)
     playerName.value = message.player.displayName;
   setStatus("Connected · waiting for first snapshot…");
@@ -149,7 +161,7 @@ function applySnapshot(message) {
   ).length;
   const playerCount = message.actors.length - botCount;
   setStatus(
-    `Tile ${player.x}, ${player.y} · ${playerCount} player${playerCount === 1 ? "" : "s"} · ${botCount} bot${botCount === 1 ? "" : "s"} · server tick ${message.tick}`,
+    `${player.x}, ${player.y} · ${playerCount} player${playerCount === 1 ? "" : "s"} · ${botCount} bots`,
   );
   performanceMonitor.recordSnapshot(
     message.tick,
@@ -160,7 +172,7 @@ function applySnapshot(message) {
 
 function updateGatherStatus(player, resourceNodes, tick) {
   if (latestAction.type !== "gather") {
-    gatherStatus.textContent = "Hold E / Gather near a tree or rock";
+    gatherStatus.textContent = "";
     return;
   }
   let x = player.x;
@@ -194,7 +206,7 @@ function renderRoster(actors, entities) {
     view?.setFollowEntity(playerId);
   }
 
-  botSummary.textContent = `Bots · ${botCount} active`;
+  botSummary.textContent = `${botCount} bot${botCount === 1 ? "" : "s"}`;
   roster.replaceChildren(
     ...humans.map((player) => {
       const item = document.createElement("li");
@@ -228,6 +240,16 @@ function selectFollowTarget(event) {
     rosterButton.classList.toggle("is-followed", isFollowed);
     rosterButton.setAttribute("aria-pressed", String(isFollowed));
   }
+}
+
+function showShortcuts() {
+  if (!shortcutsDialog.open) shortcutsDialog.showModal();
+}
+
+function isTyping(target) {
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target?.isContentEditable;
 }
 
 function sendAction() {
