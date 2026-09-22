@@ -14,6 +14,7 @@ const inventory = document.querySelector("#inventory");
 const gatherStatus = document.querySelector("#gather-status");
 const mobileGather = document.querySelector("#mobile-gather");
 const mobileAttack = document.querySelector("#mobile-attack");
+const mobileCraft = document.querySelector("#mobile-craft");
 const mobileHeal = document.querySelector("#mobile-heal");
 const craftMedkit = document.querySelector("#craft-medkit");
 const craftHonedWeapon = document.querySelector("#craft-honed-weapon");
@@ -64,6 +65,10 @@ window.addEventListener("keydown", (event) => {
 });
 craftMedkit.addEventListener("click", () => sendOneShotAction({ type: "craft-medkit" }));
 craftHonedWeapon.addEventListener("click", () => sendOneShotAction({ type: "craft-honed-weapon" }));
+mobileCraft.addEventListener("click", () => {
+  infoPanel.classList.add("is-expanded");
+  mobileInfoToggle.setAttribute("aria-expanded", "true");
+});
 mobileHeal.addEventListener("click", () => sendOneShotAction({ type: "use-medkit" }));
 
 playerName.value = localStorage.getItem("realtime-world.display-name") ?? "";
@@ -154,8 +159,10 @@ function applySnapshot(message) {
   const medkits = player.inventory?.medkits ?? 0;
   const honedWeaponCharges = player.inventory?.honedWeaponCharges ?? 0;
   inventory.textContent = `Pack: W ${pack.wood} · S ${pack.stone}  |  Stash: W ${stash.wood} · S ${stash.stone}  |  Medkits: ${medkits} · Honed hits: ${honedWeaponCharges}`;
-  craftMedkit.disabled = player.knockedOut || !isAtCamp(player) || stash.wood < 3 || stash.stone < 2;
-  craftHonedWeapon.disabled = player.knockedOut || !isAtCamp(player) || stash.wood < 4 || stash.stone < 4;
+  const atCamp = isAtCamp(player);
+  craftMedkit.disabled = player.knockedOut || !atCamp || stash.wood < 3 || stash.stone < 2;
+  craftHonedWeapon.disabled = player.knockedOut || !atCamp || stash.wood < 4 || stash.stone < 4;
+  mobileCraft.disabled = player.knockedOut || !atCamp;
   updateGatherStatus(player, message.resourceNodes ?? [], message.tick);
 
   if (!message.entities.some((entity) => entity.id === followedPlayerId))

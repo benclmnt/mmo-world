@@ -1,4 +1,5 @@
 .inventory { color: #d7c487; }
+.crafting-title { margin-top: 0.55rem; color: #b8dec1; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .craft-medkit {
   margin-top: 0.45rem;
   border: 1px solid rgb(175 222 183 / 65%);
@@ -238,6 +239,7 @@ p { margin-top: 0.25rem; color: #b2c7b7; font-size: 0.875rem; }
 
 @media (pointer: coarse) and (hover: none) {
   .mobile-gather { display: block; }
+  .craft-medkit { display: block; width: 100%; min-height: 2.75rem; margin-top: 0.35rem; font-size: 0.85rem; }
   .overlay {
     width: min(15rem, calc(100vw - 2rem));
     max-width: calc(100vw - 2rem);
@@ -271,5 +273,7 @@ p { margin-top: 0.25rem; color: #b2c7b7; font-size: 0.875rem; }
 }
 
 .mobile-attack { display: none; position: fixed; z-index: 2; right: max(1.5rem, env(safe-area-inset-right)); bottom: max(6rem, calc(env(safe-area-inset-bottom) + 4rem)); min-width: 5.5rem; min-height: 3.5rem; border: 1px solid rgb(255 255 255 / 72%); border-radius: 0.8rem; background: rgb(128 52 52 / 80%); color: #fff4d2; font: 600 0.9rem/1 inherit; touch-action: none; }
+.mobile-craft { display: none; position: fixed; z-index: 2; right: max(7.5rem, calc(env(safe-area-inset-right) + 6rem)); bottom: max(6rem, calc(env(safe-area-inset-bottom) + 4rem)); min-width: 5.5rem; min-height: 3.5rem; border: 1px solid rgb(255 255 255 / 72%); border-radius: 0.8rem; background: rgb(82 92 142 / 82%); color: #fff4d2; font: 600 0.9rem/1 inherit; touch-action: none; }
+.mobile-craft:disabled { opacity: 0.42; }
 .mobile-heal { display: none; position: fixed; z-index: 2; right: max(7.5rem, calc(env(safe-area-inset-right) + 6rem)); bottom: max(2rem, env(safe-area-inset-bottom)); min-width: 5.5rem; min-height: 3.5rem; border: 1px solid rgb(255 255 255 / 72%); border-radius: 0.8rem; background: rgb(53 112 76 / 80%); color: #fff4d2; font: 600 0.9rem/1 inherit; touch-action: none; }
-@media (pointer: coarse) and (hover: none) { .mobile-attack, .mobile-heal { display: block; } }
+@media (pointer: coarse) and (hover: none) { .mobile-attack, .mobile-craft, .mobile-heal { display: block; } }
