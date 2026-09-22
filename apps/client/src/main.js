@@ -7,6 +7,8 @@ import { createPerformanceMonitor } from "./performance-monitor.js";
 import { createWorldView } from "./world-view.js";
 
 const playerStatus = document.querySelector("#player-status");
+const respawnNotice = document.querySelector("#respawn-notice");
+const respawnCountdown = document.querySelector("#respawn-countdown");
 const playerName = document.querySelector("#player-name");
 const inventory = document.querySelector("#inventory");
 const gatherStatus = document.querySelector("#gather-status");
@@ -152,8 +154,8 @@ function applySnapshot(message) {
   const medkits = player.inventory?.medkits ?? 0;
   const honedWeaponCharges = player.inventory?.honedWeaponCharges ?? 0;
   inventory.textContent = `Pack: W ${pack.wood} · S ${pack.stone}  |  Stash: W ${stash.wood} · S ${stash.stone}  |  Medkits: ${medkits} · Honed hits: ${honedWeaponCharges}`;
-  craftMedkit.disabled = !isAtCamp(player) || stash.wood < 3 || stash.stone < 2;
-  craftHonedWeapon.disabled = !isAtCamp(player) || stash.wood < 4 || stash.stone < 4;
+  craftMedkit.disabled = player.knockedOut || !isAtCamp(player) || stash.wood < 3 || stash.stone < 2;
+  craftHonedWeapon.disabled = player.knockedOut || !isAtCamp(player) || stash.wood < 4 || stash.stone < 4;
   updateGatherStatus(player, message.resourceNodes ?? [], message.tick);
 
   if (!message.entities.some((entity) => entity.id === followedPlayerId))
@@ -182,8 +184,13 @@ function applySnapshot(message) {
   ).length;
   const playerCount = message.actors.length - botCount;
   if (player.knockedOut) {
-    setStatus(`KO · respawn in ${Math.max(0, (player.respawnsAtTick ?? message.tick) - message.tick)} ticks`);
+    const remainingTicks = Math.max(0, (player.respawnsAtTick ?? message.tick) - message.tick);
+    const remainingSeconds = Math.ceil(remainingTicks / 10);
+    respawnNotice.hidden = false;
+    respawnCountdown.textContent = `Respawning in ${remainingSeconds} second${remainingSeconds === 1 ? "" : "s"}`;
+    setStatus(`KO · respawn in ${remainingTicks} ticks`);
   } else {
+    respawnNotice.hidden = true;
     setStatus(`${player.x}, ${player.y} · ${player.health}/100 HP · ${player.protected ? "Protected" : "Vulnerable"} · ${playerCount} player${playerCount === 1 ? "" : "s"} · ${botCount} bots`);
   }
   performanceMonitor.recordSnapshot(

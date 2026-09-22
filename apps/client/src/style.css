@@ -48,6 +48,25 @@ html, body, main, #world {
 
 #world { display: block; }
 
+.respawn-notice {
+  position: fixed;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  min-width: 15rem;
+  padding: 1rem 1.4rem;
+  border: 1px solid rgb(255 132 132 / 72%);
+  border-radius: 0.65rem;
+  background: rgb(66 16 20 / 90%);
+  box-shadow: 0 0.75rem 3rem rgb(0 0 0 / 48%);
+  color: #ffe5df;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+.respawn-notice strong, .respawn-notice span { display: block; }
+.respawn-notice strong { font-size: 1.15rem; }
+.respawn-notice span { margin-top: 0.3rem; color: #ffc3b7; font-size: 0.88rem; }
+
 .overlay {
   position: fixed;
   top: 1rem;

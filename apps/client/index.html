@@ -9,6 +9,10 @@
   <body>
     <main>
       <canvas id="world" aria-label="3D world viewer"></canvas>
+      <section id="respawn-notice" class="respawn-notice" role="status" aria-live="assertive" hidden>
+        <strong>Knocked out</strong>
+        <span id="respawn-countdown">Respawning…</span>
+      </section>
       <section class="overlay" aria-live="polite">
         <button id="mobile-info-toggle" class="mobile-info-toggle" type="button" aria-expanded="false" aria-controls="info-panel-details">
           <span>Realtime World</span><span aria-hidden="true">⌄</span>
