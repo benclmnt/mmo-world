@@ -165,6 +165,7 @@ function applySnapshot(message) {
       world,
       playerId,
       message.entities,
+      message.actors,
       { predictionEnabled: new URLSearchParams(location.search).get("prediction") !== "0" },
     );
     sendAction();
@@ -173,7 +174,7 @@ function applySnapshot(message) {
   const acknowledgement = message.actionAcknowledgements?.find(
     (candidate) => candidate.entityId === playerId,
   );
-  view.applySnapshot(message.entities, message.resourceNodes ?? [], acknowledgement);
+  view.applySnapshot(message.entities, message.resourceNodes ?? [], acknowledgement, message.actors);
   view.setFollowEntity(followedPlayerId);
   renderRoster(message.actors, message.entities);
   const botCount = message.actors.filter(

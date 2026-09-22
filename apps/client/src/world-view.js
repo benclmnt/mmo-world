@@ -9,6 +9,7 @@ export function createWorldView(
   world,
   playerId,
   initialEntities,
+  initialActors = [],
   { predictionEnabled = true } = {},
 ) {
   const scene = new THREE.Scene();
@@ -43,6 +44,7 @@ export function createWorldView(
   addCampMarkers(scene, world.camps);
 
   const players = new Map();
+  const actorsById = new Map(initialActors.map((actor) => [actor.entityId, actor]));
   const interpolationDurationMs = 100;
   const predictionTickMs = 100;
   let localAction = { type: "idle" };
@@ -68,7 +70,8 @@ export function createWorldView(
   });
 
   return {
-    applySnapshot(entities, resourceNodes = [], acknowledgement = undefined) {
+    applySnapshot(entities, resourceNodes = [], acknowledgement = undefined, actors = []) {
+      for (const actor of actors) actorsById.set(actor.entityId, actor);
       terrainResources.applyResourceNodes(resourceNodes);
       const activeIds = new Set(entities.map((entity) => entity.id));
       for (const [entityId, player] of players) {
@@ -206,9 +209,10 @@ export function createWorldView(
   }
 
   function addPlayer(entity) {
-    const mesh = createPlayerMesh(entity, entity.id === playerId);
+    const mesh = createPlayerMesh(entity, actorsById.get(entity.id));
     const player = {
       mesh,
+      baseColor: mesh.userData.baseColor,
       from: mesh.position.clone(),
       target: mesh.position.clone(),
       transitionStartedAt: performance.now(),
@@ -238,35 +242,52 @@ function addLights(scene) {
   scene.add(sun);
 }
 
-function createPlayerMesh(player, isLocalPlayer) {
+function createPlayerMesh(player, actor) {
   const group = new THREE.Group();
+  const isBot = actor?.kind === "bot";
+  const baseColor = isBot ? botColor(actor.policy) : humanColor(player.id);
   const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.24, 0.45, 4, 8),
-    new THREE.MeshStandardMaterial({ color: isLocalPlayer ? 0xffc857 : playerColor(player.id), roughness: 0.65 }),
+    isBot ? new THREE.BoxGeometry(0.52, 0.62, 0.52) : new THREE.CapsuleGeometry(0.24, 0.45, 4, 8),
+    new THREE.MeshStandardMaterial({ color: baseColor, roughness: isBot ? 0.38 : 0.65, metalness: isBot ? 0.62 : 0 }),
   );
   // Capsule height is 0.45 + (2 × 0.24) = 0.93, so its center is 0.465 above ground.
-  body.position.y = 0.465;
+  body.position.y = isBot ? 0.42 : 0.465;
   body.castShadow = true;
 
   const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.22, 12, 8),
-    new THREE.MeshStandardMaterial({ color: 0xf2c39b, roughness: 0.8 }),
+    isBot ? new THREE.CylinderGeometry(0.25, 0.29, 0.22, 8) : new THREE.SphereGeometry(0.22, 12, 8),
+    new THREE.MeshStandardMaterial({ color: isBot ? 0x17212b : 0xf2c39b, roughness: isBot ? 0.3 : 0.8, metalness: isBot ? 0.72 : 0 }),
   );
-  head.position.y = 1.05;
+  head.position.y = isBot ? 0.84 : 1.05;
   head.castShadow = true;
 
+  if (isBot) {
+    const antenna = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.025, 0.26, 6),
+      new THREE.MeshStandardMaterial({ color: baseColor, metalness: 0.7, roughness: 0.3 }),
+    );
+    antenna.position.y = 1.08;
+    group.add(antenna);
+  }
   group.add(body, head);
+  group.userData.baseColor = baseColor.clone();
   group.position.set(player.x, 0, player.y);
   return group;
 }
 
 function setHealth(player, health) {
   const body = player.mesh.children[0];
-  if (body?.material?.color) body.material.color.setHSL(Math.max(0, health / 100) * 0.32, 0.72, 0.52);
+  if (body?.material?.color) body.material.color.copy(player.baseColor).multiplyScalar(0.42 + Math.max(0, health / 100) * 0.58);
 }
 
-function playerColor(entityId) {
-  return new THREE.Color().setHSL((entityId * 0.61803398875) % 1, 0.62, 0.52);
+const HUMAN_PALETTE = [0x4dabf7, 0x51cf66, 0xff922b, 0xda77f2, 0xf06595, 0x20c997];
+function humanColor(entityId) {
+  const color = new THREE.Color(HUMAN_PALETTE[entityId % HUMAN_PALETTE.length]);
+  color.offsetHSL(0, ((entityId * 0.37) % 0.14) - 0.07, ((entityId * 0.61) % 0.12) - 0.06);
+  return color;
+}
+function botColor(policy) {
+  return new THREE.Color({ "random-walker": 0x78909c, "persistent-wanderer": 0x607d8b, "obstacle-aware-wanderer": 0x26a69a, "player-raider": 0xef5350 }[policy] ?? 0x78909c);
 }
 
 /** Adds panning, zoom, and reset controls without changing the player's simulation state. */
