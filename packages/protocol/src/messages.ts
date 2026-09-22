@@ -81,6 +81,7 @@ export function isActionMessage(value: unknown): value is ActionMessage {
     ((value.action.type === "move" || value.action.type === "gather" || value.action.type === "attack") &&
       isDirection(value.action.direction)) ||
     value.action.type === "craft-medkit" ||
+    value.action.type === "craft-honed-weapon" ||
     value.action.type === "use-medkit"
   );
 }

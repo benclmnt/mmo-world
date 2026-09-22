@@ -14,6 +14,7 @@ const mobileGather = document.querySelector("#mobile-gather");
 const mobileAttack = document.querySelector("#mobile-attack");
 const mobileHeal = document.querySelector("#mobile-heal");
 const craftMedkit = document.querySelector("#craft-medkit");
+const craftHonedWeapon = document.querySelector("#craft-honed-weapon");
 const roster = document.querySelector("#player-roster");
 const botSummary = document.querySelector("#bot-summary");
 const infoPanel = document.querySelector(".overlay");
@@ -56,9 +57,11 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("keydown", (event) => {
   if (isTyping(event.target) || event.repeat) return;
   if (event.code === "KeyQ") { event.preventDefault(); sendOneShotAction({ type: "craft-medkit" }); }
+  if (event.code === "KeyC") { event.preventDefault(); sendOneShotAction({ type: "craft-honed-weapon" }); }
   if (event.code === "KeyX") { event.preventDefault(); sendOneShotAction({ type: "use-medkit" }); }
 });
 craftMedkit.addEventListener("click", () => sendOneShotAction({ type: "craft-medkit" }));
+craftHonedWeapon.addEventListener("click", () => sendOneShotAction({ type: "craft-honed-weapon" }));
 mobileHeal.addEventListener("click", () => sendOneShotAction({ type: "use-medkit" }));
 
 playerName.value = localStorage.getItem("realtime-world.display-name") ?? "";
@@ -147,8 +150,10 @@ function applySnapshot(message) {
   const pack = player.inventory?.unsecuredPack ?? { wood: 0, stone: 0 };
   const stash = player.inventory?.securedStash ?? { wood: 0, stone: 0 };
   const medkits = player.inventory?.medkits ?? 0;
-  inventory.textContent = `Pack: W ${pack.wood} · S ${pack.stone}  |  Stash: W ${stash.wood} · S ${stash.stone}  |  Medkits: ${medkits}`;
+  const honedWeaponCharges = player.inventory?.honedWeaponCharges ?? 0;
+  inventory.textContent = `Pack: W ${pack.wood} · S ${pack.stone}  |  Stash: W ${stash.wood} · S ${stash.stone}  |  Medkits: ${medkits} · Honed hits: ${honedWeaponCharges}`;
   craftMedkit.disabled = !isAtCamp(player) || stash.wood < 3 || stash.stone < 2;
+  craftHonedWeapon.disabled = !isAtCamp(player) || stash.wood < 4 || stash.stone < 4;
   updateGatherStatus(player, message.resourceNodes ?? [], message.tick);
 
   if (!message.entities.some((entity) => entity.id === followedPlayerId))
@@ -273,6 +278,7 @@ function sendOneShotAction(action) {
   const sequence = nextActionSequence++;
   send({ type: "action", sequence, action });
   if (action.type === "craft-medkit") gatherStatus.textContent = "Crafting medkit…";
+  if (action.type === "craft-honed-weapon") gatherStatus.textContent = "Honing weapon…";
   if (action.type === "use-medkit") gatherStatus.textContent = "Using medkit…";
 }
 

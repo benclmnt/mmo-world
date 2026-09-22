@@ -55,6 +55,16 @@ describe("combat, knockout, and extraction", () => {
     expect(simulation.createSnapshot(1).entities.find((entity) => entity.id === 1)).toMatchObject({ health: 100, inventory: { medkits: 0 } });
   });
 
+  test("hones a weapon at camp and spends a charge only on a successful hit", () => {
+    const world = new World(1, 5, 3); world.setCamps([{ id: "home", kind: "home", x: 1, y: 1, radius: 1 }]);
+    const simulation = new Simulation(world); simulation.placeEntity({ id: 1, x: 1, y: 1 }); simulation.placeEntity({ id: 2, x: 2, y: 1 });
+    simulation.setSecuredStash(1, { wood: 4, stone: 4 });
+    expect(simulation.step({ actions: new Map([[1, { type: "craft-honed-weapon" }]]) }).events).toContainEqual({ type: "crafted-honed-weapon", entityId: 1, charges: 3 });
+    world.setCamps([]);
+    expect(simulation.step({ actions: new Map([[1, attack("east")]]) }).events).toContainEqual({ type: "attacked", entityId: 1, targetId: 2, damage: 30 });
+    expect(simulation.createSnapshot(1).entities.find((entity) => entity.id === 1)?.inventory).toMatchObject({ securedStash: { wood: 0, stone: 0 }, honedWeaponCharges: 2 });
+  });
+
   test("deposits anywhere in a camp's safe ring and never exposes another player's balances", () => {
     const world = new World(1, 5, 5); world.setCamps([{ id: "home", kind: "home", x: 2, y: 2, radius: 1 }]);
     const simulation = new Simulation(world); simulation.placeEntity({ id: 1, x: 1, y: 2 }); simulation.placeEntity({ id: 2, x: 0, y: 0 }); simulation.setInventory(1, { wood: 4, stone: 2 });

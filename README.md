@@ -25,8 +25,8 @@ home camp → choose a route → gather in the wilderness → meet players
 Unsecured resources are resources carried in the wilderness.
 A knockout drops some unsecured resources as loot.
 
-Secured resources are resources deposited at a camp. Spend **3 wood + 2 stone** at a camp to craft a medkit; use it in the wilderness to restore **40 HP**.
-A knockout does not remove secured resources or crafted medkits.
+Secured resources are resources deposited at a camp. Spend **3 wood + 2 stone** at a camp to craft a medkit; use it in the wilderness to restore **40 HP**. Or spend **4 wood + 4 stone** to hone a weapon for **three 30-damage hits**.
+A knockout does not remove secured resources or crafted supplies.
 
 ```text
 Gather 10 wood → carry 10 unsecured wood → get knocked out → lose some wood
@@ -152,7 +152,7 @@ Humans, bots, and future training agents can use the same action interface.
 ## Client movement prediction
 
 - Hold **F** (or the mobile Attack button) to attack in the last movement direction.
-- Press **Q** at a camp to craft a medkit (3 wood + 2 stone), then press **X** (or mobile Heal) to restore 40 HP.
+- Press **Q** at a camp to craft a medkit (3 wood + 2 stone), **C** to hone a weapon (4 wood + 4 stone; three 30-damage hits), then press **X** (or mobile Heal) to restore 40 HP.
 
 It does not predict other player positions, hits, or loot results.
 

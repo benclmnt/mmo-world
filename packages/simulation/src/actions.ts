@@ -7,6 +7,7 @@ export type Action =
   | { type: "gather"; direction: Direction }
   | { type: "attack"; direction: Direction }
   | { type: "craft-medkit" }
+  | { type: "craft-honed-weapon" }
   | { type: "use-medkit" };
 export interface StepInput { actions: ReadonlyMap<EntityId, Action>; }
 export interface MovementEvent { type: "moved"; entityId: EntityId; fromX: number; fromY: number; toX: number; toY: number; }
@@ -17,5 +18,6 @@ export interface LootCollectedEvent { type: "loot-collected"; entityId: EntityId
 export interface DepositedEvent { type: "deposited"; entityId: EntityId; campId: string; wood: number; stone: number; }
 export interface CraftedMedkitEvent { type: "crafted-medkit"; entityId: EntityId; }
 export interface UsedMedkitEvent { type: "used-medkit"; entityId: EntityId; healing: number; }
-export type SimulationEvent = MovementEvent | GatheredEvent | AttackEvent | KnockedOutEvent | LootCollectedEvent | DepositedEvent | CraftedMedkitEvent | UsedMedkitEvent;
+export interface CraftedWeaponEvent { type: "crafted-honed-weapon"; entityId: EntityId; charges: number; }
+export type SimulationEvent = MovementEvent | GatheredEvent | AttackEvent | KnockedOutEvent | LootCollectedEvent | DepositedEvent | CraftedMedkitEvent | UsedMedkitEvent | CraftedWeaponEvent;
 export interface StepResult { tick: number; events: readonly SimulationEvent[]; }
