@@ -15,4 +15,4 @@ export interface SnapshotEntity extends Entity {
 }
 export interface LootPileSnapshot { id: number; x: number; y: number; wood: number; stone: number; expiresAtTick: number; }
 export interface SimulationSnapshot { tick: number; entities: readonly SnapshotEntity[]; resourceNodes: readonly ResourceNodeSnapshot[]; lootPiles: readonly LootPileSnapshot[]; }
-export interface AgentObservation { tick: number; self: Entity; originX: number; originY: number; terrain: readonly (Terrain | null)[]; entities: readonly Entity[]; }
+export interface AgentObservation { tick: number; self: Entity; originX: number; originY: number; terrain: readonly (Terrain | null)[]; resourceNodes: readonly ResourceNodeSnapshot[]; entities: readonly Entity[]; }

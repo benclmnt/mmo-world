@@ -40,9 +40,9 @@ describe("combat, knockout, and extraction", () => {
     expect(simulation.getInventory(2)).toEqual({ wood: 2, stone: 1 }); expect(simulation.createSnapshot().lootPiles).toEqual([]);
   });
 
-  test("deposits at a camp and never exposes another player's balances", () => {
+  test("deposits anywhere in a camp's safe ring and never exposes another player's balances", () => {
     const world = new World(1, 5, 5); world.setCamps([{ id: "home", kind: "home", x: 2, y: 2, radius: 1 }]);
-    const simulation = new Simulation(world); simulation.placeEntity({ id: 1, x: 2, y: 2 }); simulation.placeEntity({ id: 2, x: 0, y: 0 }); simulation.setInventory(1, { wood: 4, stone: 2 });
+    const simulation = new Simulation(world); simulation.placeEntity({ id: 1, x: 1, y: 2 }); simulation.placeEntity({ id: 2, x: 0, y: 0 }); simulation.setInventory(1, { wood: 4, stone: 2 });
     expect(simulation.step({ actions: new Map([[1, gather("north")]]) }).events).toContainEqual({ type: "deposited", entityId: 1, campId: "home", wood: 4, stone: 2 });
     expect(simulation.getInventory(1)).toEqual({ wood: 0, stone: 0 }); expect(simulation.getSecuredStash(1)).toEqual({ wood: 4, stone: 2 });
     const other = simulation.createSnapshot(2).entities.find((entity) => entity.id === 1)!; expect(other.inventory).toBeUndefined();

@@ -149,6 +149,7 @@ describe("GameRoom heuristic agents", () => {
       originX: 6,
       originY: 6,
       terrain: Array(81).fill(Terrain.Grass),
+      resourceNodes: [],
       entities: [{ id: 100, x: 10, y: 10 }],
     };
     const directions = Array.from({ length: 8 }, () => {
@@ -158,6 +159,24 @@ describe("GameRoom heuristic agents", () => {
 
     expect(new Set(directions).size).toBeGreaterThan(1);
   });
+
+  test("does not camp on a depleted resource node", () => {
+    const wanderer = createBot(101, 1, 12345);
+    const terrain = Array(81).fill(Terrain.Grass);
+    terrain[4 * 9 + 4] = Terrain.Tree;
+    const action = wanderer.controller.nextAction({
+      tick: 0,
+      self: { id: 101, x: 10, y: 10 },
+      originX: 6,
+      originY: 6,
+      terrain,
+      resourceNodes: [],
+      entities: [{ id: 101, x: 10, y: 10 }],
+    });
+
+    expect(action.type).toBe("move");
+  });
+
   test("produces the same authoritative bot state for the same seed", () => {
     const first = new GameRoom(98765);
     const second = new GameRoom(98765);

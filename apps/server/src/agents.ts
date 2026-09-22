@@ -5,7 +5,7 @@ import type {
 import type { EntityId } from "../../../packages/simulation/src/Entity";
 import { SeededRandom } from "../../../packages/simulation/src/generation/rng";
 import type { AgentObservation } from "../../../packages/simulation/src/state";
-import { isWalkable, Terrain } from "../../../packages/simulation/src/Terrain";
+import { isWalkable } from "../../../packages/simulation/src/Terrain";
 
 export type BotPolicyName =
   "random-walker" | "persistent-wanderer" | "obstacle-aware-wanderer";
@@ -105,19 +105,18 @@ class ObstacleAwareWanderer implements BotController {
 }
 
 function gatherIfNearby(observation: AgentObservation): Action | undefined {
-  const at = terrainAt(observation, observation.self.x, observation.self.y);
-  if (at === Terrain.Tree || at === Terrain.Rock) return { type: "gather", direction: "north" };
+  const resourceAt = (x: number, y: number) =>
+    observation.resourceNodes.some((node) => node.x === x && node.y === y);
+  if (resourceAt(observation.self.x, observation.self.y)) return { type: "gather", direction: "north" };
   for (const direction of directions) {
     const delta = directionDelta(direction);
-    const terrain = terrainAt(observation, observation.self.x + delta.x, observation.self.y + delta.y);
-    if (terrain === Terrain.Tree || terrain === Terrain.Rock) return { type: "gather", direction };
+    const x = observation.self.x + delta.x, y = observation.self.y + delta.y;
+    if (resourceAt(x, y)) return { type: "gather", direction };
   }
   return undefined;
 }
 
-function terrainAt(observation: AgentObservation, x: number, y: number): Terrain | null | undefined {
-  return observation.terrain[(y - observation.originY) * 9 + x - observation.originX];
-}
+
 function isOpen(observation: AgentObservation, direction: Direction): boolean {
   const delta = directionDelta(direction);
   const x = observation.self.x + delta.x;
