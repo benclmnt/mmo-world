@@ -82,6 +82,7 @@ p { margin-top: 0.25rem; color: #b2c7b7; font-size: 0.875rem; }
 .roster-title { margin-top: 0.6rem; }
 #player-roster { margin: 0.2rem 0 0; padding-left: 1.1rem; color: #d5e4d4; font-size: 0.78rem; }
 #player-roster li { pointer-events: auto; }
+.bot-summary { color: #b2c7b7; font-size: 0.78rem; }
 
 .roster-player {
   appearance: none;

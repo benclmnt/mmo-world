@@ -13,6 +13,7 @@ const inventory = document.querySelector("#inventory");
 const gatherStatus = document.querySelector("#gather-status");
 const mobileGather = document.querySelector("#mobile-gather");
 const roster = document.querySelector("#player-roster");
+const botSummary = document.querySelector("#bot-summary");
 const infoPanel = document.querySelector(".overlay");
 const mobileInfoToggle = document.querySelector("#mobile-info-toggle");
 const performanceMonitor = createPerformanceMonitor(
@@ -185,8 +186,17 @@ function updateGatherStatus(player, resourceNodes, tick) {
 
 function renderRoster(actors, entities) {
   const positions = new Map(entities.map((entity) => [entity.id, entity]));
+  const humans = actors.filter((actor) => actor.kind !== "bot");
+  const botCount = actors.length - humans.length;
+
+  if (!humans.some((human) => human.entityId === followedPlayerId)) {
+    followedPlayerId = playerId;
+    view?.setFollowEntity(playerId);
+  }
+
+  botSummary.textContent = `Bots · ${botCount} active`;
   roster.replaceChildren(
-    ...actors.map((player) => {
+    ...humans.map((player) => {
       const item = document.createElement("li");
       const button = document.createElement("button");
       const position = positions.get(player.entityId);
@@ -196,7 +206,7 @@ function renderRoster(actors, entities) {
       button.className = "roster-player";
       button.classList.toggle("is-followed", isFollowed);
       button.setAttribute("aria-pressed", String(isFollowed));
-      button.textContent = `${player.entityId === playerId ? "You · " : ""}${player.displayName}${player.kind === "bot" ? " · bot" : ""}${position ? ` · ${position.x}, ${position.y}` : ""}`;
+      button.textContent = `${player.entityId === playerId ? "You · " : ""}${player.displayName}${position ? ` · ${position.x}, ${position.y}` : ""}`;
       item.append(button);
       return item;
     }),
