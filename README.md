@@ -2,24 +2,8 @@
 
 ## The project
 
-Realtime World is a real-time PvP MMO for web browsers.
-
-Many players share one wilderness at the same time.
-Players leave a safe camp, gather resources, and meet other players.
-Each player can fight, run away, or work with others.
-
-This is not a set of separate matches.
-The goal is one active world with competition, teamwork, escape, and rivalries.
-
-## Product goal
-
-Build a shared PvP world where players have real effects on other players.
-
-The project succeeds when players notice each other through shared risks and results.
-A high number of connected clients is not enough.
-
-Long-term progress gives players a reason to return.
-The first gameplay loop is PvP extraction.
+Realtime World is a real-time PvP MMO in the web browser. Many players can roam around a single map at the same time.
+Players leave a safe camp, gather resources, and meet other players. Each player can fight, run away, or work with others.
 
 ## Player loop
 
